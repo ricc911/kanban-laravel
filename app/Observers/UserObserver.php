@@ -13,7 +13,7 @@ class UserObserver
      * Handle the User "created" event.
      */
     public function created(User $user): void
-{
+    {
         $freePlan = Plan::where('slug', 'free')->firstOrFail();
 
         Subscription::create([

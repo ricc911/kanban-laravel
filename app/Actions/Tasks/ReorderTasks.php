@@ -15,7 +15,7 @@ class ReorderTasks
         BoardColumn $column,
         array $taskIds
     ): void {
-        if (!$column->board->workspace->hasMember($user)) {
+        if (! $column->board->workspace->hasMember($user)) {
             throw ValidationException::withMessages([
                 'column' => 'Non hai accesso a questa colonna.',
             ]);
@@ -25,10 +25,10 @@ class ReorderTasks
 
         $existingTaskIds = $column->tasks()
             ->pluck('id')
-            ->map(fn($id) => (int) $id);
+            ->map(fn ($id) => (int) $id);
 
         $requestedTaskIds = collect($taskIds)
-            ->map(fn($id) => (int) $id);
+            ->map(fn ($id) => (int) $id);
 
         if ($existingTaskIds->diff($requestedTaskIds)->isNotEmpty()) {
             throw ValidationException::withMessages([
@@ -44,7 +44,7 @@ class ReorderTasks
 
         if (
             $tasks->contains(
-                fn(Task $task) => $task->board_id !== $column->board_id
+                fn (Task $task) => $task->board_id !== $column->board_id
             )
         ) {
             throw ValidationException::withMessages([

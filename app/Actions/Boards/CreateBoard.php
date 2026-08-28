@@ -15,9 +15,10 @@ class CreateBoard
         User $user,
         Workspace $workspace,
         string $name,
-        ?Folder $folder = null
+        ?Folder $folder = null,
+        ?string $color = null
     ): Board {
-        if (!$workspace->hasMember($user)) {
+        if (! $workspace->hasMember($user)) {
             throw ValidationException::withMessages([
                 'workspace' => 'Non fai parte di questo workspace.',
             ]);
@@ -47,11 +48,12 @@ class CreateBoard
             ]);
         }
 
-        return DB::transaction(function () use ($workspace, $folder, $name) {
+        return DB::transaction(function () use ($workspace, $folder, $name, $color) {
             $board = Board::create([
                 'workspace_id' => $workspace->id,
                 'folder_id' => $folder?->id,
                 'name' => trim($name),
+                'color' => $color,
             ]);
 
             $board->columns()->createMany([

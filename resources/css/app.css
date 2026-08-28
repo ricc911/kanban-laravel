@@ -1,13 +1,4 @@
-﻿@import 'tailwindcss';
-
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
-
-@theme {
-    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-}
-
-:root {
+﻿:root {
       color-scheme: dark;
       --bg: #080b12;
       --panel: #101722;
@@ -770,136 +761,123 @@
         grid-template-columns: 1fr 1fr 46px;
       }
     }
+/* Laravel bridge: only elements absent from the v0 dashboard. */
+.hidden,
+[hidden] {
+  display: none !important;
+}
 
-    .hidden,
-    [hidden] {
-      display: none !important;
-    }
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+}
 
-    .auth-shell {
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 28px;
-    }
+.auth-panel {
+  width: min(980px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(16, 23, 34, .92);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
 
-    .auth-panel {
-      width: min(980px, 100%);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: rgba(16, 23, 34, .92);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
+.auth-panel-head {
+  padding: 24px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
 
-    .auth-panel-head {
-      padding: 24px;
-      border-bottom: 1px solid var(--line);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 18px;
-    }
+.auth-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 
-    .auth-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+.auth-card {
+  padding: 24px;
+}
 
-    .auth-card {
-      padding: 24px;
-    }
+.auth-card + .auth-card {
+  border-left: 1px solid var(--line);
+}
 
-    .auth-card + .auth-card {
-      border-left: 1px solid var(--line);
-    }
+.auth-card h2 {
+  margin: 0 0 18px;
+  font-size: 20px;
+}
 
-    .auth-card h2 {
-      margin: 0 0 18px;
-      font-size: 20px;
-    }
+.field-stack {
+  display: grid;
+  gap: 12px;
+}
 
-    .field-stack {
-      display: grid;
-      gap: 12px;
-    }
+.field-stack label {
+  display: grid;
+  gap: 7px;
+  color: #b9c7d8;
+  font-size: 13px;
+  font-weight: 800;
+}
 
-    .field-stack label {
-      display: grid;
-      gap: 7px;
-      color: #b9c7d8;
-      font-size: 13px;
-      font-weight: 800;
-    }
+.field-stack input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0d1420;
+  color: var(--text);
+  padding: 10px 12px;
+  outline: none;
+}
 
-    .field-stack input {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #0d1420;
-      color: var(--text);
-      padding: 10px 12px;
-      outline: none;
-    }
+.field-stack input:focus {
+  border-color: rgba(96,165,250,.68);
+  box-shadow: 0 0 0 3px rgba(37,99,235,.16);
+}
 
-    .field-stack input:focus {
-      border-color: rgba(96,165,250,.68);
-      box-shadow: 0 0 0 3px rgba(37,99,235,.16);
-    }
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
 
-    .form-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      margin-top: 18px;
-    }
+.message {
+  color: #fca5a5;
+  font-size: 13px;
+  font-weight: 700;
+}
 
-    .message {
-      color: #fca5a5;
-      font-size: 13px;
-      font-weight: 700;
-    }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 
-    .topbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
+.workspace-select {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #101722;
+  color: var(--text);
+  padding: 6px 9px;
+  font-size: 13px;
+  font-weight: 800;
+  outline: none;
+}
 
-    .workspace-select {
-      min-height: 32px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #101722;
-      color: var(--text);
-      padding: 6px 9px;
-      font-size: 13px;
-      font-weight: 800;
-      outline: none;
-    }
+@media (max-width: 760px) {
+  .auth-grid {
+    grid-template-columns: 1fr;
+  }
 
-    .project-card .project-edit {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-    }
-
-    .modal-readonly-note {
-      margin: 0 0 14px;
-      color: var(--muted);
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    @media (max-width: 760px) {
-      .auth-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .auth-card + .auth-card {
-        border-left: 0;
-        border-top: 1px solid var(--line);
-      }
-    }
+  .auth-card + .auth-card {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}

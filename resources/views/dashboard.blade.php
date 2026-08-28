@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest" defer></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
     @vite(['resources/css/app.css', 'resources/js/dashboard.js'])
 </head>
 <body>
@@ -18,8 +18,8 @@
                 <div class="brand">
                     <div class="brand-badge">KB</div>
                     <div>
-                        <div class="brand-title">Task Board</div>
-                        <div class="brand-subtitle">Accedi al tuo workspace</div>
+                        <div class="brand-title">Kanban</div>
+                        <div class="brand-subtitle">Working boards</div>
                     </div>
                 </div>
                 <p class="message" data-auth-message hidden></p>
@@ -40,7 +40,7 @@
                     </div>
                     <div class="form-actions">
                         <button class="btn btn-primary with-icon" type="submit">
-                            <i data-lucide="log-in" class="icon"></i>
+                            <i class="icon" data-lucide="log-in"></i>
                             Accedi
                         </button>
                     </div>
@@ -68,7 +68,7 @@
                     </div>
                     <div class="form-actions">
                         <button class="btn btn-primary with-icon" type="submit">
-                            <i data-lucide="user-plus" class="icon"></i>
+                            <i class="icon" data-lucide="user-plus"></i>
                             Crea account
                         </button>
                     </div>
@@ -82,18 +82,18 @@
             <div class="brand">
                 <div class="brand-badge">KB</div>
                 <div>
-                    <div class="brand-title">Task Board</div>
-                    <div class="brand-subtitle" data-user-email></div>
+                    <div class="brand-title">Kanban</div>
+                    <div class="brand-subtitle">Working boards</div>
                 </div>
             </div>
             <div class="topbar-actions">
                 <select class="workspace-select" data-workspace-select aria-label="Workspace"></select>
                 <button class="btn btn-primary with-icon" type="button" data-new-project>
-                    <i data-lucide="plus" class="icon"></i>
+                    <i class="icon" data-lucide="plus"></i>
                     Nuovo progetto
                 </button>
                 <button class="btn with-icon" type="button" data-logout>
-                    <i data-lucide="log-out" class="icon"></i>
+                    <i class="icon" data-lucide="log-out"></i>
                     Esci
                 </button>
             </div>
@@ -101,115 +101,174 @@
 
         <main class="page">
             <div class="page-head">
-                <h1>Progetti</h1>
+                <h1>I tuoi progetti</h1>
+                <p class="page-note">Apri un progetto per entrare nel suo Kanban.</p>
                 <p class="page-note" data-dashboard-message hidden></p>
             </div>
 
-            <section class="workspace-head">
-                <div class="workspace-title">
-                    <div class="folder-path" data-folder-path></div>
-                    <nav class="workspace-nav" aria-label="Viste progetto">
-                        <button class="btn with-icon" type="button" data-root>
-                            <i data-lucide="home" class="icon"></i>
-                            Principale
+            <div class="workspace">
+                <div class="workspace-head">
+                    <div class="workspace-title">
+                        <div class="folder-path" data-folder-path></div>
+                        <div class="workspace-nav">
+                            <button class="btn active with-icon" type="button" data-root>
+                                <i class="icon" data-lucide="home"></i>
+                                Principale
+                            </button>
+                            <button class="btn with-icon" type="button" data-archived>
+                                <i class="icon" data-lucide="archive"></i>
+                                Progetti archiviati
+                            </button>
+                        </div>
+                    </div>
+                    <div class="workspace-actions">
+                        <button class="btn with-icon" type="button" data-new-folder>
+                            <i class="icon" data-lucide="folder-plus"></i>
+                            Nuova cartella
                         </button>
-                        <button class="btn with-icon" type="button" data-archived>
-                            <i data-lucide="archive" class="icon"></i>
-                            Progetti archiviati
-                        </button>
-                    </nav>
+                    </div>
                 </div>
-                <div class="workspace-actions">
-                    <button class="btn btn-primary with-icon" type="button" data-new-folder>
-                        <i data-lucide="folder-plus" class="icon"></i>
-                        Nuova cartella
-                    </button>
+
+                <div class="folder-section is-hidden" data-folder-section>
+                    <div class="section-label">Cartelle</div>
+                    <div class="folders-grid" data-folders></div>
                 </div>
-            </section>
 
-            <section class="folder-section" data-folder-section>
-                <p class="section-label">Cartelle</p>
-                <div class="folders-grid" data-folders></div>
-            </section>
+                <div class="project-section-head">
+                    <div class="section-label">Progetti</div>
+                </div>
+                <section class="projects" data-boards></section>
+            </div>
 
-            <section>
-                <p class="section-label">Progetti</p>
-                <div class="projects" data-boards></div>
-            </section>
+            <div class="status" data-status>Caricamento progetti...</div>
         </main>
 
+        <div class="quick-drop" data-quick-drop-shell>
+            <div class="quick-drop-zone root" data-quick-drop="root">
+                <i class="icon" data-lucide="home"></i>
+                Sposta in Principale
+            </div>
+            <div class="quick-drop-zone archive" data-quick-drop="archive">
+                <i class="icon" data-lucide="archive"></i>
+                Sposta in Archivio
+            </div>
+        </div>
+
         <div class="modal-backdrop" data-project-modal hidden>
-            <form class="modal" data-project-form>
+            <div class="modal">
                 <div class="modal-head">
                     <h2 data-project-modal-title>Nuovo progetto</h2>
-                    <button class="btn with-icon" type="button" data-close-modal>
-                        <i data-lucide="x" class="icon"></i>
-                    </button>
+                    <button class="close" type="button" data-close-modal>&times;</button>
                 </div>
-                <div class="modal-body">
+                <form class="modal-body" data-project-form>
                     <p class="modal-readonly-note" data-project-modal-note hidden></p>
-                    <label class="field">
-                        Nome progetto
-                        <input type="text" name="name" data-project-name placeholder="Es. Board attivita">
-                    </label>
-                    <label class="field">
-                        Descrizione
-                        <textarea name="description" data-project-description placeholder="Scrivi una breve descrizione..."></textarea>
-                    </label>
                     <div class="field">
-                        Colore progetto
+                        <label for="projectName">Nome progetto</label>
+                        <input id="projectName" name="name" maxlength="120" required placeholder="Es. Sito cliente Rossi" data-project-name>
+                    </div>
+                    <div class="field">
+                        <label for="projectColor">Colore progetto</label>
                         <div class="color-row">
-                            <select data-project-color-preset>
+                            <select id="projectColorPreset" aria-label="Colore progetto preimpostato" data-project-color-preset>
+                                <option value="#ffffff">Bianco</option>
+                                <option value="#808080">Grigio</option>
+                                <option value="#000000">Nero</option>
+                                <option value="#facc15">Giallo</option>
+                                <option value="#f97316">Arancione</option>
+                                <option value="#ef4444">Rosso</option>
+                                <option value="#ec4899">Rosa</option>
+                                <option value="#8b5cf6">Viola</option>
                                 <option value="#2563eb">Blu</option>
-                                <option value="#4f6f9f">Azzurro</option>
-                                <option value="#d6a257">Giallo</option>
-                                <option value="#d96060">Rosso</option>
+                                <option value="#38bdf8">Azzurro</option>
+                                <option value="#86efac">Verde chiaro</option>
+                                <option value="#22c55e">Verde</option>
+                                <option value="">Personalizzato</option>
                             </select>
-                            <input type="text" data-project-color-text value="#2563eb">
-                            <input type="color" data-project-color value="#2563eb">
+                            <input id="projectColorText" maxlength="7" placeholder="#2563eb" data-project-color-text>
+                            <input id="projectColor" type="color" value="#2563eb" aria-label="Colore progetto" data-project-color>
                         </div>
                     </div>
                     <div class="modal-actions">
-                        <button class="modal-button neutral" type="button" data-close-modal>Annulla</button>
-                        <button class="modal-button warning-solid" type="submit" data-project-submit>Salva progetto</button>
+                        <button class="btn" type="button" data-close-modal>Annulla</button>
+                        <button class="btn btn-primary with-icon" type="submit" data-project-submit>
+                            <i class="icon" data-lucide="plus"></i>
+                            <span>Crea progetto</span>
+                        </button>
                     </div>
-                </div>
-            </form>
+                </form>
+            </div>
         </div>
 
         <div class="modal-backdrop" data-folder-modal hidden>
-            <form class="modal" data-folder-form>
+            <div class="modal">
                 <div class="modal-head">
                     <h2 data-folder-modal-title>Nuova cartella</h2>
-                    <button class="btn with-icon" type="button" data-close-modal>
-                        <i data-lucide="x" class="icon"></i>
-                    </button>
+                    <button class="close" type="button" data-close-modal>&times;</button>
                 </div>
-                <div class="modal-body">
+                <form class="modal-body" data-folder-form>
                     <p class="modal-readonly-note" data-folder-modal-note hidden></p>
-                    <label class="field">
-                        Nome cartella
-                        <input type="text" name="name" data-folder-name placeholder="Es. Clienti">
-                    </label>
                     <div class="field">
-                        Colore cartella
+                        <label for="folderName">Nome cartella</label>
+                        <input id="folderName" name="name" maxlength="120" required placeholder="Es. Clienti" data-folder-name>
+                    </div>
+                    <div class="field">
+                        <label for="folderColor">Colore cartella</label>
                         <div class="color-row">
-                            <select data-folder-color-preset>
-                                <option value="#4f6f9f">Blu</option>
-                                <option value="#2563eb">Azzurro</option>
-                                <option value="#d6a257">Giallo</option>
-                                <option value="#d96060">Rosso</option>
+                            <select id="folderColorPreset" aria-label="Colore preimpostato" data-folder-color-preset>
+                                <option value="#ffffff">Bianco</option>
+                                <option value="#808080">Grigio</option>
+                                <option value="#000000">Nero</option>
+                                <option value="#facc15">Giallo</option>
+                                <option value="#f97316">Arancione</option>
+                                <option value="#ef4444">Rosso</option>
+                                <option value="#ec4899">Rosa</option>
+                                <option value="#8b5cf6">Viola</option>
+                                <option value="#2563eb">Blu</option>
+                                <option value="#38bdf8">Azzurro</option>
+                                <option value="#86efac">Verde chiaro</option>
+                                <option value="#22c55e">Verde</option>
+                                <option value="">Personalizzato</option>
                             </select>
-                            <input type="text" data-folder-color-text value="#4f6f9f">
-                            <input type="color" data-folder-color value="#4f6f9f">
+                            <input id="folderColorText" maxlength="7" placeholder="#4f6f9f" data-folder-color-text>
+                            <input id="folderColor" type="color" value="#4f6f9f" aria-label="Colore cartella" data-folder-color>
                         </div>
                     </div>
                     <div class="modal-actions">
-                        <button class="modal-button neutral" type="button" data-close-modal>Annulla</button>
-                        <button class="modal-button warning-solid" type="submit" data-folder-submit>Salva cartella</button>
+                        <button class="btn" type="button" data-close-modal>Annulla</button>
+                        <button class="btn btn-primary with-icon" type="submit" data-folder-submit>
+                            <i class="icon" data-lucide="save"></i>
+                            Salva cartella
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="modal-backdrop" data-confirm-modal hidden>
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+                <div class="modal-head">
+                    <h2 id="confirmTitle">Conferma eliminazione</h2>
+                    <button class="close" type="button" data-close-confirm>&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="confirm-message" data-confirm-message></p>
+                    <div class="modal-actions confirm-actions">
+                        <button class="btn modal-button neutral" type="button" data-confirm-result="cancel">Annulla</button>
+                        <button class="btn modal-button danger-outline with-icon" type="button" data-confirm-result="delete">
+                            <i class="icon" data-lucide="trash-2"></i>
+                            Elimina
+                        </button>
+                        <button class="btn modal-button danger-solid with-icon" type="button" data-confirm-result="delete-kan">
+                            <i class="icon" data-lucide="trash"></i>
+                            Elimina anche Kan
+                        </button>
+                        <button class="btn modal-button warning-solid with-icon" type="button" data-confirm-result="archive-kan">
+                            <i class="icon" data-lucide="archive"></i>
+                            Elimina e archivia Kan
+                        </button>
                     </div>
                 </div>
-            </form>
+            </div>
         </div>
     </section>
 </body>

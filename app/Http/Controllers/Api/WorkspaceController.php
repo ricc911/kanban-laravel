@@ -28,5 +28,4 @@ class WorkspaceController extends Controller
             'data' => $workspaces,
         ]);
     }
-
 }

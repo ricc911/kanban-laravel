@@ -13,9 +13,10 @@ class CreateFolder
         User $user,
         Workspace $workspace,
         string $name,
-        ?Folder $parent = null
+        ?Folder $parent = null,
+        ?string $color = null
     ): Folder {
-        if (!$workspace->hasMember($user)) {
+        if (! $workspace->hasMember($user)) {
             throw ValidationException::withMessages([
                 'workspace' => 'Non fai parte di questo workspace.',
             ]);
@@ -34,6 +35,7 @@ class CreateFolder
             'workspace_id' => $workspace->id,
             'parent_id' => $parent?->id,
             'name' => trim($name),
+            'color' => $color,
         ]);
     }
 }

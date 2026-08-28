@@ -25,7 +25,16 @@ class TaskController extends Controller
     {
         $category = $request->filled('category_id') ? Category::find($request->validated('category_id')) : null;
 
-        return response()->json(['data' => $action->execute($request->user(), $board, $column, $request->validated('title'), $request->validated('description'), $category)], 201);
+        return response()->json(['data' => $action->execute(
+            $request->user(),
+            $board,
+            $column,
+            $request->validated('title'),
+            $request->validated('description'),
+            $category,
+            $request->validated('priority'),
+            $request->validated('due_at'),
+        )], 201);
     }
 
     public function update(UpdateTaskRequest $request, Task $task, UpdateTask $action): JsonResponse

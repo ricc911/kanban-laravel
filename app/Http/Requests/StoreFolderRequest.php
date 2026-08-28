@@ -24,6 +24,7 @@ class StoreFolderRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            'color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'parent_id' => ['nullable', 'integer', 'exists:folders,id'],
         ];
     }

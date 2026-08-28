@@ -17,7 +17,9 @@ class CreateTask
         BoardColumn $column,
         string $title,
         ?string $description = null,
-        ?Category $category = null
+        ?Category $category = null,
+        ?string $priority = null,
+        ?string $dueAt = null
     ): Task {
         if (! $board->workspace->hasMember($user)) {
             throw ValidationException::withMessages([
@@ -48,6 +50,8 @@ class CreateTask
             'category_id' => $category?->id,
             'title' => trim($title),
             'description' => $description,
+            'priority' => $priority,
+            'due_at' => $dueAt,
             'position' => $position,
         ]);
     }

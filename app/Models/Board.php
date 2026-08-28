@@ -12,6 +12,7 @@ class Board extends Model
         'workspace_id',
         'folder_id',
         'name',
+        'color',
         'description',
         'archived',
     ];

@@ -3,10 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Models\Workspace;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
-use App\Models\Workspace;
 
 class AuthFlowTest extends TestCase
 {

@@ -10,6 +10,10 @@ const state = {
     boards: [],
     currentFolderId: null,
     viewingArchived: false,
+    draggedBoardId: null,
+    draggedFolderId: null,
+    initialRouteApplied: false,
+    confirmResolve: null,
 };
 
 const elements = {
@@ -20,7 +24,6 @@ const elements = {
     logoutButton: document.querySelector('[data-logout]'),
     authMessage: document.querySelector('[data-auth-message]'),
     dashboardMessage: document.querySelector('[data-dashboard-message]'),
-    userEmail: document.querySelector('[data-user-email]'),
     workspaceSelect: document.querySelector('[data-workspace-select]'),
     folderPath: document.querySelector('[data-folder-path]'),
     folderSection: document.querySelector('[data-folder-section]'),
@@ -30,15 +33,19 @@ const elements = {
     archivedButton: document.querySelector('[data-archived]'),
     newProjectButton: document.querySelector('[data-new-project]'),
     newFolderButton: document.querySelector('[data-new-folder]'),
+    status: document.querySelector('[data-status]'),
+    quickDropRoot: document.querySelector('[data-quick-drop="root"]'),
+    quickDropArchive: document.querySelector('[data-quick-drop="archive"]'),
+    quickDropZones: [...document.querySelectorAll('[data-quick-drop]')],
     projectModal: document.querySelector('[data-project-modal]'),
     projectForm: document.querySelector('[data-project-form]'),
     projectModalTitle: document.querySelector('[data-project-modal-title]'),
     projectModalNote: document.querySelector('[data-project-modal-note]'),
     projectName: document.querySelector('[data-project-name]'),
-    projectDescription: document.querySelector('[data-project-description]'),
     projectColor: document.querySelector('[data-project-color]'),
     projectColorText: document.querySelector('[data-project-color-text]'),
     projectColorPreset: document.querySelector('[data-project-color-preset]'),
+    projectSubmit: document.querySelector('[data-project-submit]'),
     folderModal: document.querySelector('[data-folder-modal]'),
     folderForm: document.querySelector('[data-folder-form]'),
     folderModalTitle: document.querySelector('[data-folder-modal-title]'),
@@ -47,6 +54,10 @@ const elements = {
     folderColor: document.querySelector('[data-folder-color]'),
     folderColorText: document.querySelector('[data-folder-color-text]'),
     folderColorPreset: document.querySelector('[data-folder-color-preset]'),
+    confirmModal: document.querySelector('[data-confirm-modal]'),
+    confirmMessage: document.querySelector('[data-confirm-message]'),
+    confirmButtons: [...document.querySelectorAll('[data-confirm-result]')],
+    closeConfirm: document.querySelector('[data-close-confirm]'),
 };
 
 function csrfToken() {
@@ -100,29 +111,28 @@ async function request(url, options = {}) {
     return payload;
 }
 
-function showMessage(target, message = '', isError = true) {
-    if (!target) return;
-    target.textContent = message;
-    target.hidden = !message;
-    target.classList.toggle('message', Boolean(message));
-    target.style.color = isError ? '#fca5a5' : '#86efac';
-}
-
 function refreshIcons() {
     if (window.lucide?.createIcons) {
         window.lucide.createIcons();
     }
 }
 
+function showMessage(target, message = '', isError = true) {
+    if (!target) return;
+    target.textContent = message;
+    target.hidden = !message;
+    target.style.color = isError ? '#fca5a5' : '#86efac';
+}
+
 function icon(name) {
     const node = document.createElement('i');
-    node.dataset.lucide = name;
     node.className = 'icon';
+    node.dataset.lucide = name;
     return node;
 }
 
-function textNode(value) {
-    return document.createTextNode(value ?? '');
+function normalizeColor(value, fallback = DEFAULT_FOLDER_COLOR) {
+    return /^#[0-9a-f]{6}$/i.test(value ?? '') ? value : fallback;
 }
 
 function normalizeFolder(folder) {
@@ -131,7 +141,7 @@ function normalizeFolder(folder) {
         id: Number(folder.id),
         parent_id: folder.parent_id === null || folder.parent_id === undefined ? null : Number(folder.parent_id),
         name: folder.name ?? 'Cartella',
-        color: folder.color || DEFAULT_FOLDER_COLOR,
+        color: normalizeColor(folder.color, DEFAULT_FOLDER_COLOR),
         archived: Boolean(folder.archived),
     };
 }
@@ -142,8 +152,7 @@ function normalizeBoard(board) {
         id: Number(board.id),
         folder_id: board.folder_id === null || board.folder_id === undefined ? null : Number(board.folder_id),
         name: board.name ?? 'Board',
-        description: board.description ?? '',
-        color: board.color || DEFAULT_PROJECT_COLOR,
+        color: normalizeColor(board.color, DEFAULT_PROJECT_COLOR),
         archived: Boolean(board.archived),
         task_count: Number(board.tasks_count ?? board.task_count ?? 0),
     };
@@ -153,55 +162,66 @@ function activeWorkspace() {
     return state.workspaces.find((workspace) => Number(workspace.id) === Number(state.workspaceId)) ?? null;
 }
 
-function currentFolder() {
-    return state.folders.find((folder) => folder.id === state.currentFolderId) ?? null;
-}
-
-function folderChildren(parentId, archived = state.viewingArchived) {
-    return state.folders.filter((folder) => folder.parent_id === parentId && folder.archived === archived);
-}
-
 function folderTreeIds(folderId) {
-    const ids = [folderId];
-    const stack = [folderId];
+    if (!folderId) return [];
 
-    while (stack.length > 0) {
-        const currentId = stack.pop();
-        const children = state.folders.filter((folder) => folder.parent_id === currentId);
-        children.forEach((folder) => {
-            ids.push(folder.id);
-            stack.push(folder.id);
-        });
+    const ids = [folderId];
+
+    for (let index = 0; index < ids.length; index += 1) {
+        state.folders
+            .filter((folder) => folder.parent_id === ids[index])
+            .forEach((folder) => ids.push(folder.id));
     }
 
     return ids;
 }
 
 function folderAncestors(folderId) {
-    const ancestors = [];
-    let folder = state.folders.find((item) => item.id === folderId) ?? null;
+    const path = [];
     const seen = new Set();
+    let current = state.folders.find((folder) => folder.id === folderId) ?? null;
 
-    while (folder && !seen.has(folder.id)) {
-        ancestors.unshift(folder);
-        seen.add(folder.id);
-        folder = state.folders.find((item) => item.id === folder.parent_id) ?? null;
+    while (current && !seen.has(current.id)) {
+        if (state.viewingArchived && !current.archived) break;
+        if (!state.viewingArchived && current.archived) break;
+        path.unshift(current);
+        seen.add(current.id);
+        current = state.folders.find((folder) => folder.id === current.parent_id) ?? null;
     }
 
-    return ancestors;
+    return path;
+}
+
+function childrenOf(parentId) {
+    if (state.viewingArchived && parentId === null) {
+        return state.folders.filter((folder) => {
+            if (!folder.archived) return false;
+            const parent = state.folders.find((item) => item.id === folder.parent_id);
+            return folder.parent_id === null || !parent?.archived;
+        });
+    }
+
+    return state.folders.filter(
+        (folder) => folder.parent_id === parentId && folder.archived === state.viewingArchived
+    );
 }
 
 function boardCountForFolder(folderId) {
-    const ids = folderTreeIds(folderId);
+    const folderIds = folderTreeIds(folderId);
 
-    return state.boards.filter((board) => ids.includes(board.folder_id) && board.archived === state.viewingArchived).length;
+    return state.boards.filter(
+        (board) => board.archived === state.viewingArchived && folderIds.includes(board.folder_id)
+    ).length;
 }
 
 function visibleBoards() {
-    return state.boards.filter((board) => {
-        if (board.archived !== state.viewingArchived) return false;
-        return state.viewingArchived ? board.folder_id === state.currentFolderId : board.folder_id === state.currentFolderId;
-    });
+    if (state.viewingArchived && state.currentFolderId === null) {
+        return state.boards.filter((board) => board.archived);
+    }
+
+    return state.boards.filter(
+        (board) => board.archived === state.viewingArchived && board.folder_id === state.currentFolderId
+    );
 }
 
 function formatDate(value) {
@@ -218,27 +238,24 @@ function formatDate(value) {
     }).format(date);
 }
 
-function setAuthenticatedView() {
-    elements.auth.hidden = true;
-    elements.dashboard.hidden = false;
-    elements.userEmail.textContent = state.user?.email ?? '';
-    renderWorkspaceOptions();
-    renderDashboard();
-}
+function boardUrl(board) {
+    const params = new URLSearchParams();
 
-function setGuestView() {
-    state.user = null;
-    state.workspaces = [];
-    state.workspaceId = null;
-    state.folders = [];
-    state.boards = [];
-    state.currentFolderId = null;
-    state.viewingArchived = false;
-    elements.dashboard.hidden = true;
-    elements.auth.hidden = false;
-    elements.registerForm.reset();
-    elements.loginForm.reset();
-    refreshIcons();
+    if (state.workspaceId) {
+        params.set('workspace_id', String(state.workspaceId));
+    }
+
+    if (board.folder_id !== null && board.folder_id !== undefined) {
+        params.set('return_folder', String(board.folder_id));
+    }
+
+    if (board.archived) {
+        params.set('return_archived', '1');
+    }
+
+    const query = params.toString();
+
+    return `/boards/${encodeURIComponent(board.id)}${query ? `?${query}` : ''}`;
 }
 
 function renderWorkspaceOptions() {
@@ -258,19 +275,10 @@ function renderWorkspaceOptions() {
 function renderFolderPath() {
     elements.folderPath.replaceChildren();
 
-    if (state.viewingArchived && !state.currentFolderId) {
-        const archivedLabel = document.createElement('button');
-        archivedLabel.type = 'button';
-        archivedLabel.textContent = 'Progetti archiviati';
-        archivedLabel.dataset.archivedPath = 'true';
-        elements.folderPath.append(archivedLabel);
-        return;
-    }
-
     const root = document.createElement('button');
     root.type = 'button';
-    root.dataset.folderPathRoot = 'true';
-    root.textContent = 'Principale';
+    root.textContent = state.viewingArchived ? 'Progetti archiviati' : 'Progetti';
+    root.dataset.folderPathRoot = state.viewingArchived ? 'archive' : 'root';
     elements.folderPath.append(root);
 
     folderAncestors(state.currentFolderId).forEach((folder) => {
@@ -288,16 +296,20 @@ function renderFolderPath() {
 }
 
 function renderFolders() {
-    const children = folderChildren(state.currentFolderId, state.viewingArchived);
+    const visibleFolders = childrenOf(state.currentFolderId);
     elements.folders.replaceChildren();
-    elements.folderSection.hidden = children.length === 0;
+    elements.folderSection.classList.toggle('is-hidden', visibleFolders.length === 0);
+    elements.folderSection.hidden = visibleFolders.length === 0;
 
-    children.forEach((folder) => {
+    visibleFolders.forEach((folder) => {
         const card = document.createElement('article');
         card.className = 'folder-card';
+        card.draggable = true;
         card.role = 'button';
         card.tabIndex = 0;
         card.dataset.folder = String(folder.id);
+        card.dataset.folderDrag = String(folder.id);
+        card.dataset.folderDrop = String(folder.id);
         card.style.setProperty('--folder-color', folder.color);
 
         const dot = document.createElement('span');
@@ -305,7 +317,7 @@ function renderFolders() {
 
         const name = document.createElement('span');
         name.className = 'folder-card-name';
-        name.append(textNode(folder.name));
+        name.textContent = folder.name;
 
         const count = document.createElement('span');
         count.className = 'folder-count';
@@ -316,115 +328,129 @@ function renderFolders() {
 
         const edit = document.createElement('button');
         edit.type = 'button';
-        edit.title = 'Modifica cartella';
+        edit.title = 'Modifica';
+        edit.ariaLabel = 'Modifica cartella';
         edit.dataset.editFolder = String(folder.id);
         edit.append(icon('pencil'));
 
-        const archive = document.createElement('button');
-        archive.type = 'button';
-        archive.title = 'Archivio non collegato in questa fase';
-        archive.dataset.disabledWrite = 'true';
-        archive.append(icon('archive'));
-
         const remove = document.createElement('button');
         remove.type = 'button';
-        remove.title = 'Eliminazione non collegata in questa fase';
-        remove.dataset.disabledWrite = 'true';
+        remove.title = 'Elimina';
+        remove.ariaLabel = 'Elimina cartella';
+        remove.dataset.deleteFolder = String(folder.id);
         remove.append(icon('trash-2'));
 
-        actions.append(edit, archive, remove);
+        actions.append(edit, remove);
         card.append(dot, name, count, actions);
         elements.folders.append(card);
     });
+
+    attachFolderDragEvents();
 }
 
 function renderBoards() {
-    const boards = visibleBoards();
+    const visible = visibleBoards();
     elements.boards.replaceChildren();
 
-    if (boards.length === 0) {
+    if (visible.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'empty';
         empty.textContent = state.viewingArchived
-            ? 'Nessun progetto archiviato in questa posizione.'
-            : 'Nessun progetto in questa posizione.';
+            ? 'Nessun progetto archiviato.'
+            : 'Nessun progetto in questa cartella.';
         elements.boards.append(empty);
-        return;
+    } else {
+        visible.forEach((board) => {
+            const card = document.createElement('article');
+            card.className = `project-card${board.archived ? ' archived-card' : ''}`;
+            card.draggable = true;
+            card.dataset.boardDrag = String(board.id);
+            card.style.setProperty('--project-color', board.color);
+
+            const edit = document.createElement('button');
+            edit.className = 'project-action project-button edit-project with-icon';
+            edit.type = 'button';
+            edit.title = 'Modifica progetto';
+            edit.dataset.editProject = String(board.id);
+            edit.append(icon('pencil'));
+
+            const content = document.createElement('div');
+            const title = document.createElement('h2');
+            title.className = 'project-name';
+            title.textContent = board.name;
+
+            const meta = document.createElement('div');
+            meta.className = 'project-meta';
+            meta.append(
+                document.createTextNode(`${board.task_count} ${board.task_count === 1 ? 'evento' : 'eventi'}`),
+                document.createElement('br'),
+                document.createTextNode(`Aggiornato ${formatDate(board.updated_at)}`)
+            );
+            content.append(title, meta);
+
+            const actions = document.createElement('div');
+            actions.className = 'project-actions';
+
+            const open = document.createElement('a');
+            open.className = 'project-action open-project with-icon';
+            open.href = boardUrl(board);
+            open.dataset.openBoard = String(board.id);
+            open.append(document.createTextNode('Apri Kanban'), icon('arrow-right'));
+
+            const sideActions = document.createElement('div');
+            sideActions.className = 'project-side-actions';
+
+            const archive = document.createElement('button');
+            archive.className = 'project-action project-button archive-project with-icon';
+            archive.type = 'button';
+            archive.dataset.archiveProject = String(board.id);
+            archive.append(icon(board.archived ? 'rotate-ccw' : 'archive'));
+            archive.append(document.createTextNode(board.archived ? 'Ripristina' : 'Archivia'));
+
+            const remove = document.createElement('button');
+            remove.className = 'project-action project-button delete-project with-icon';
+            remove.type = 'button';
+            remove.dataset.deleteBoard = String(board.id);
+            remove.append(icon('trash-2'), document.createTextNode('Elimina'));
+
+            sideActions.append(archive, remove);
+            actions.append(open, sideActions);
+            card.append(edit, content, actions);
+            elements.boards.append(card);
+        });
     }
 
-    boards.forEach((board) => {
-        const card = document.createElement('article');
-        card.className = 'project-card';
-        card.style.setProperty('--project-color', board.color);
+    attachProjectDragEvents();
+}
 
-        const edit = document.createElement('button');
-        edit.type = 'button';
-        edit.className = 'project-action project-button edit-project with-icon';
-        edit.title = 'Modifica progetto';
-        edit.dataset.editProject = String(board.id);
-        edit.append(icon('pencil'));
+function syncQuickDropVisibility() {
+    const inPrincipal = !state.viewingArchived && state.currentFolderId === null;
+    const inArchive = state.viewingArchived;
+    const showRoot = !inPrincipal;
+    const showArchive = !inArchive;
 
-        const title = document.createElement('h3');
-        title.className = 'project-name';
-        title.textContent = board.name;
-
-        const meta = document.createElement('p');
-        meta.className = 'project-meta';
-        meta.textContent = `${board.task_count} eventi`;
-
-        const updated = document.createElement('p');
-        updated.className = 'project-updated';
-        const updatedAt = formatDate(board.updated_at);
-        updated.textContent = updatedAt ? `Aggiornato ${updatedAt}` : '';
-
-        const actions = document.createElement('div');
-        actions.className = 'project-actions';
-
-        const open = document.createElement('button');
-        open.type = 'button';
-        open.className = 'project-action open-project';
-        open.dataset.openBoard = String(board.id);
-        open.append(textNode('Apri Kanban '));
-        open.append(textNode('->'));
-
-        const sideActions = document.createElement('div');
-        sideActions.className = 'project-side-actions';
-
-        const archive = document.createElement('button');
-        archive.type = 'button';
-        archive.className = 'project-action project-button archive-project with-icon';
-        archive.dataset.disabledWrite = 'true';
-        archive.append(icon('archive'));
-        archive.append(textNode(board.archived ? 'Ripristina' : 'Archivia'));
-
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'project-action project-button delete-project with-icon';
-        remove.dataset.disabledWrite = 'true';
-        remove.append(icon('trash-2'));
-        remove.append(textNode('Elimina'));
-
-        sideActions.append(archive, remove);
-        actions.append(open, sideActions);
-        card.append(edit, title, meta, updated, actions);
-        elements.boards.append(card);
-    });
+    elements.quickDropRoot.classList.toggle('is-hidden', !showRoot);
+    elements.quickDropArchive.classList.toggle('is-hidden', !showArchive);
+    elements.quickDropRoot.parentElement.classList.toggle('only-root', showRoot && !showArchive);
+    elements.quickDropRoot.parentElement.classList.toggle('only-archive', showArchive && !showRoot);
 }
 
 function renderDashboard() {
     const workspace = activeWorkspace();
-    showMessage(elements.dashboardMessage, '');
 
     if (!workspace) {
         elements.workspaceSelect.hidden = true;
         elements.folderPath.replaceChildren();
         elements.folders.replaceChildren();
-        elements.boards.replaceChildren();
+        elements.folderSection.classList.add('is-hidden');
         elements.folderSection.hidden = true;
+        elements.boards.replaceChildren();
+
         const empty = document.createElement('div');
         empty.className = 'empty';
         empty.textContent = 'Non hai ancora workspace disponibili.';
         elements.boards.append(empty);
+        elements.status.textContent = '0 progetti';
         refreshIcons();
         return;
     }
@@ -434,12 +460,35 @@ function renderDashboard() {
     renderFolders();
     renderBoards();
 
+    const visible = visibleBoards();
     elements.rootButton.hidden = !state.viewingArchived && state.currentFolderId === null;
-    elements.archivedButton.hidden = state.viewingArchived && state.currentFolderId === null;
-    elements.rootButton.classList.toggle('active', !state.viewingArchived);
+    elements.archivedButton.hidden = state.viewingArchived;
+    elements.rootButton.classList.toggle('active', !state.viewingArchived && state.currentFolderId === null);
     elements.archivedButton.classList.toggle('active', state.viewingArchived);
     elements.newFolderButton.hidden = state.viewingArchived;
+    elements.status.textContent = `${visible.length} ${visible.length === 1 ? 'progetto' : 'progetti'}`;
+    syncQuickDropVisibility();
     refreshIcons();
+}
+
+function applyInitialRoute() {
+    if (state.initialRouteApplied) return;
+    state.initialRouteApplied = true;
+
+    const params = new URLSearchParams(window.location.search);
+    const folderId = params.has('return_folder') ? Number(params.get('return_folder')) : null;
+    const archived = params.get('return_archived') === '1';
+
+    if (folderId) {
+        const folder = state.folders.find((item) => item.id === folderId);
+        if (folder) {
+            state.currentFolderId = folder.id;
+            state.viewingArchived = Boolean(folder.archived);
+            return;
+        }
+    }
+
+    state.viewingArchived = archived;
 }
 
 async function loadWorkspaceData() {
@@ -450,6 +499,8 @@ async function loadWorkspaceData() {
         return;
     }
 
+    elements.status.textContent = 'Caricamento progetti...';
+
     const [foldersResponse, boardsResponse] = await Promise.all([
         request(`/api/workspaces/${state.workspaceId}/folders`),
         request(`/api/workspaces/${state.workspaceId}/boards`),
@@ -457,9 +508,11 @@ async function loadWorkspaceData() {
 
     state.folders = (foldersResponse.data ?? []).map(normalizeFolder);
     state.boards = (boardsResponse.data ?? []).map(normalizeBoard);
+    applyInitialRoute();
 
     if (state.currentFolderId && !state.folders.some((folder) => folder.id === state.currentFolderId)) {
         state.currentFolderId = null;
+        state.viewingArchived = false;
     }
 
     renderDashboard();
@@ -478,24 +531,57 @@ async function loadAuthenticatedUser() {
         ? storedWorkspace
         : fallbackWorkspace;
 
+    elements.auth.hidden = true;
+    elements.dashboard.hidden = false;
     await loadWorkspaceData();
-    setAuthenticatedView();
+}
+
+function setGuestView() {
+    state.user = null;
+    state.workspaces = [];
+    state.workspaceId = null;
+    state.folders = [];
+    state.boards = [];
+    state.currentFolderId = null;
+    state.viewingArchived = false;
+    elements.dashboard.hidden = true;
+    elements.auth.hidden = false;
+    elements.loginForm.reset();
+    elements.registerForm.reset();
+    refreshIcons();
+}
+
+function setSubmitButton(button, iconName, label) {
+    button.replaceChildren(icon(iconName), document.createElement('span'));
+    button.lastElementChild.textContent = label;
 }
 
 function openProjectModal(board = null) {
+    elements.projectForm.dataset.boardId = board?.id ?? '';
     elements.projectModalTitle.textContent = board ? 'Modifica progetto' : 'Nuovo progetto';
     elements.projectModalNote.hidden = true;
     elements.projectModalNote.textContent = '';
     elements.projectName.value = board?.name ?? '';
-    elements.projectDescription.value = board?.description ?? '';
     setProjectColor(board?.color ?? DEFAULT_PROJECT_COLOR);
+    setSubmitButton(elements.projectSubmit, board ? 'save' : 'plus', board ? 'Salva progetto' : 'Crea progetto');
     elements.projectModal.hidden = false;
     elements.projectModal.classList.add('open');
-    elements.projectName.focus();
+    setTimeout(() => elements.projectName.focus(), 30);
+    refreshIcons();
+}
+
+function closeProjectModal() {
+    elements.projectModal.classList.remove('open');
+    elements.projectModal.hidden = true;
+    elements.projectForm.reset();
+    elements.projectForm.dataset.boardId = '';
+    setProjectColor(DEFAULT_PROJECT_COLOR);
+    setSubmitButton(elements.projectSubmit, 'plus', 'Crea progetto');
     refreshIcons();
 }
 
 function openFolderModal(folder = null) {
+    elements.folderForm.dataset.folderId = folder?.id ?? '';
     elements.folderModalTitle.textContent = folder ? 'Modifica cartella' : 'Nuova cartella';
     elements.folderModalNote.hidden = true;
     elements.folderModalNote.textContent = '';
@@ -503,39 +589,233 @@ function openFolderModal(folder = null) {
     setFolderColor(folder?.color ?? DEFAULT_FOLDER_COLOR);
     elements.folderModal.hidden = false;
     elements.folderModal.classList.add('open');
-    elements.folderName.focus();
+    setTimeout(() => elements.folderName.focus(), 30);
     refreshIcons();
 }
 
+function closeFolderModal() {
+    elements.folderModal.classList.remove('open');
+    elements.folderModal.hidden = true;
+    elements.folderForm.reset();
+    elements.folderForm.dataset.folderId = '';
+    setFolderColor(DEFAULT_FOLDER_COLOR);
+}
+
 function closeModals() {
-    [elements.projectModal, elements.folderModal].forEach((modal) => {
-        modal.hidden = true;
-        modal.classList.remove('open');
+    closeProjectModal();
+    closeFolderModal();
+}
+
+function confirmDialog(message, actions = ['delete']) {
+    const actionSet = new Set(actions);
+    elements.confirmMessage.textContent = message;
+    elements.confirmButtons.forEach((button) => {
+        const result = button.dataset.confirmResult;
+        button.classList.toggle('is-hidden', result !== 'cancel' && !actionSet.has(result));
+    });
+    elements.confirmModal.hidden = false;
+    elements.confirmModal.classList.add('open');
+    refreshIcons();
+
+    return new Promise((resolve) => {
+        state.confirmResolve = resolve;
     });
 }
 
+function closeConfirmModal(result = 'cancel') {
+    elements.confirmModal.classList.remove('open');
+    elements.confirmModal.hidden = true;
+
+    if (state.confirmResolve) {
+        state.confirmResolve(result);
+        state.confirmResolve = null;
+    }
+}
+
 function syncPreset(select, value) {
-    const match = Array.from(select.options).find((option) => option.value.toLowerCase() === value.toLowerCase());
-    select.value = match?.value ?? '';
+    const normalized = value.toLowerCase();
+    const match = [...select.options].find(
+        (option) => option.value && option.value.toLowerCase() === normalized
+    );
+    select.value = match ? match.value : '';
 }
 
 function setProjectColor(value) {
-    const color = /^#[0-9a-f]{6}$/i.test(value) ? value : DEFAULT_PROJECT_COLOR;
+    const color = normalizeColor(value, DEFAULT_PROJECT_COLOR);
     elements.projectColor.value = color;
     elements.projectColorText.value = color;
     syncPreset(elements.projectColorPreset, color);
 }
 
 function setFolderColor(value) {
-    const color = /^#[0-9a-f]{6}$/i.test(value) ? value : DEFAULT_FOLDER_COLOR;
+    const color = normalizeColor(value, DEFAULT_FOLDER_COLOR);
     elements.folderColor.value = color;
     elements.folderColorText.value = color;
     syncPreset(elements.folderColorPreset, color);
 }
 
-function showReadOnlyWriteMessage(target, message) {
-    target.textContent = message;
-    target.hidden = false;
+async function saveProject() {
+    const name = elements.projectName.value.trim();
+    const color = normalizeColor(elements.projectColorText.value, elements.projectColor.value);
+    const board = state.boards.find((item) => item.id === Number(elements.projectForm.dataset.boardId));
+    if (!name) return;
+
+    if (board) {
+        await request(`/api/boards/${board.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ name, color, description: board.description ?? null }),
+        });
+        return;
+    }
+
+    await request(`/api/workspaces/${state.workspaceId}/boards`, {
+        method: 'POST',
+        body: JSON.stringify({ name, color, folder_id: state.viewingArchived ? null : state.currentFolderId }),
+    });
+}
+
+async function saveFolder() {
+    const name = elements.folderName.value.trim();
+    const color = normalizeColor(elements.folderColorText.value, elements.folderColor.value);
+    const folder = state.folders.find((item) => item.id === Number(elements.folderForm.dataset.folderId));
+    if (!name) return;
+
+    if (folder) {
+        await request(`/api/folders/${folder.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ name, color }),
+        });
+        return;
+    }
+
+    await request(`/api/workspaces/${state.workspaceId}/folders`, {
+        method: 'POST',
+        body: JSON.stringify({ name, color, parent_id: state.currentFolderId }),
+    });
+}
+
+async function moveBoardTo(boardId, folderId, archived) {
+    await request(`/api/boards/${boardId}/move`, {
+        method: 'POST',
+        body: JSON.stringify({ folder_id: folderId, archived }),
+    });
+    await loadWorkspaceData();
+}
+
+async function archiveFolderTo(folderId, archived) {
+    await request(`/api/folders/${folderId}/archive`, {
+        method: 'POST',
+        body: JSON.stringify({ archived }),
+    });
+    await loadWorkspaceData();
+}
+
+async function moveFolderTo(folderId, parentId) {
+    await request(`/api/folders/${folderId}/move`, {
+        method: 'POST',
+        body: JSON.stringify({ parent_id: parentId }),
+    });
+    await loadWorkspaceData();
+}
+
+function clearDropTargets() {
+    document.querySelectorAll('.drop-target').forEach((target) => target.classList.remove('drop-target'));
+}
+
+function resetDraggingState() {
+    state.draggedBoardId = null;
+    state.draggedFolderId = null;
+    document.body.classList.remove('dragging-board');
+    clearDropTargets();
+    elements.boards.querySelectorAll('.dragging').forEach((card) => card.classList.remove('dragging'));
+    elements.folders.querySelectorAll('.dragging').forEach((card) => card.classList.remove('dragging'));
+}
+
+function attachFolderDragEvents() {
+    elements.folders.querySelectorAll('[data-folder-drop]').forEach((card) => {
+        card.addEventListener('dragover', (event) => {
+            if (!state.draggedBoardId && !state.draggedFolderId) return;
+            const targetFolderId = Number(card.dataset.folderDrop);
+            if (state.draggedFolderId && folderTreeIds(state.draggedFolderId).includes(targetFolderId)) return;
+            event.preventDefault();
+            card.classList.add('drop-target');
+        });
+        card.addEventListener('dragleave', () => card.classList.remove('drop-target'));
+        card.addEventListener('drop', async (event) => {
+            event.preventDefault();
+            const targetFolderId = Number(card.dataset.folderDrop);
+            const boardId = state.draggedBoardId;
+            const folderId = state.draggedFolderId;
+            resetDraggingState();
+            if (!boardId && !folderId) return;
+
+            try {
+                if (folderId) {
+                    await moveFolderTo(folderId, targetFolderId);
+                    return;
+                }
+                await moveBoardTo(boardId, targetFolderId, state.viewingArchived);
+            } catch (error) {
+                showMessage(elements.dashboardMessage, `Non riesco a spostare l'elemento: ${error.message}`);
+            }
+        });
+    });
+
+    elements.folders.querySelectorAll('[data-folder-drag]').forEach((card) => {
+        card.addEventListener('dragstart', (event) => {
+            state.draggedFolderId = Number(card.dataset.folderDrag);
+            card.classList.add('dragging');
+            document.body.classList.add('dragging-board');
+            event.dataTransfer?.setData('text/plain', `folder:${state.draggedFolderId}`);
+            if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+        });
+        card.addEventListener('dragend', resetDraggingState);
+    });
+}
+
+function attachProjectDragEvents() {
+    elements.boards.querySelectorAll('[data-board-drag]').forEach((card) => {
+        card.addEventListener('dragstart', (event) => {
+            state.draggedBoardId = Number(card.dataset.boardDrag);
+            card.classList.add('dragging');
+            document.body.classList.add('dragging-board');
+            event.dataTransfer?.setData('text/plain', String(state.draggedBoardId));
+            if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+        });
+        card.addEventListener('dragend', resetDraggingState);
+    });
+}
+
+function attachQuickDropEvents() {
+    elements.quickDropZones.forEach((zone) => {
+        zone.addEventListener('dragover', (event) => {
+            if (!state.draggedBoardId && !state.draggedFolderId) return;
+            event.preventDefault();
+            zone.classList.add('drop-target');
+        });
+        zone.addEventListener('dragleave', () => zone.classList.remove('drop-target'));
+        zone.addEventListener('drop', async (event) => {
+            event.preventDefault();
+            const action = zone.dataset.quickDrop;
+            const boardId = state.draggedBoardId;
+            const folderId = state.draggedFolderId;
+            resetDraggingState();
+            if (!boardId && !folderId) return;
+
+            try {
+                if (folderId) {
+                    state.currentFolderId = null;
+                    state.viewingArchived = action === 'archive';
+                    await archiveFolderTo(folderId, action === 'archive');
+                    return;
+                }
+
+                await moveBoardTo(boardId, null, action === 'archive');
+            } catch (error) {
+                showMessage(elements.dashboardMessage, `Non riesco a spostare il progetto: ${error.message}`);
+            }
+        });
+    });
 }
 
 elements.registerForm.addEventListener('submit', async (event) => {
@@ -602,20 +882,41 @@ elements.archivedButton.addEventListener('click', () => {
 elements.newProjectButton.addEventListener('click', () => openProjectModal());
 elements.newFolderButton.addEventListener('click', () => openFolderModal());
 
-elements.projectForm.addEventListener('submit', (event) => {
+elements.projectForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    showReadOnlyWriteMessage(
-        elements.projectModalNote,
-        'La dashboard Laravel usa solo le API di lettura in questa fase.'
-    );
+
+    try {
+        await saveProject();
+        closeProjectModal();
+        await loadWorkspaceData();
+    } catch (error) {
+        showMessage(elements.dashboardMessage, `Non riesco a salvare il progetto: ${error.message}`);
+    }
 });
 
-elements.folderForm.addEventListener('submit', (event) => {
+elements.folderForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    showReadOnlyWriteMessage(
-        elements.folderModalNote,
-        'La dashboard Laravel usa solo le API di lettura in questa fase.'
-    );
+
+    try {
+        await saveFolder();
+        closeFolderModal();
+        await loadWorkspaceData();
+    } catch (error) {
+        showMessage(elements.dashboardMessage, `Non riesco a salvare la cartella: ${error.message}`);
+    }
+});
+
+elements.projectModal.addEventListener('click', (event) => {
+    if (event.target === elements.projectModal) closeProjectModal();
+});
+
+elements.folderModal.addEventListener('click', (event) => {
+    if (event.target === elements.folderModal) closeFolderModal();
+});
+
+elements.closeConfirm.addEventListener('click', () => closeConfirmModal('cancel'));
+elements.confirmButtons.forEach((button) => {
+    button.addEventListener('click', () => closeConfirmModal(button.dataset.confirmResult));
 });
 
 elements.projectColorPreset.addEventListener('change', (event) => {
@@ -634,7 +935,7 @@ elements.folderColorText.addEventListener('input', (event) => {
     if (/^#[0-9a-f]{6}$/i.test(event.target.value)) setFolderColor(event.target.value);
 });
 
-document.addEventListener('click', (event) => {
+document.addEventListener('click', async (event) => {
     if (event.target.closest('[data-close-modal]')) {
         closeModals();
         return;
@@ -650,9 +951,9 @@ document.addEventListener('click', (event) => {
         return;
     }
 
-    const folderPath = event.target.closest('[data-folder-path]');
-    if (folderPath) {
-        const folder = state.folders.find((item) => item.id === Number(folderPath.dataset.folderPath));
+    const pathFolder = event.target.closest('[data-folder-path] [data-folder-path]');
+    if (pathFolder) {
+        const folder = state.folders.find((item) => item.id === Number(pathFolder.dataset.folderPath));
         if (!folder) return;
         state.currentFolderId = folder.id;
         state.viewingArchived = folder.archived;
@@ -660,16 +961,10 @@ document.addEventListener('click', (event) => {
         return;
     }
 
-    if (event.target.closest('[data-folder-path-root]')) {
+    const pathRoot = event.target.closest('[data-folder-path-root]');
+    if (pathRoot) {
         state.currentFolderId = null;
-        state.viewingArchived = false;
-        renderDashboard();
-        return;
-    }
-
-    if (event.target.closest('[data-archived-path]')) {
-        state.currentFolderId = null;
-        state.viewingArchived = true;
+        state.viewingArchived = pathRoot.dataset.folderPathRoot === 'archive';
         renderDashboard();
         return;
     }
@@ -688,19 +983,83 @@ document.addEventListener('click', (event) => {
         return;
     }
 
-    if (event.target.closest('[data-open-board]')) {
-        showMessage(elements.dashboardMessage, 'La schermata Kanban verra migrata nel prossimo step.', false);
+    const archiveProject = event.target.closest('[data-archive-project]');
+    if (archiveProject) {
+        const board = state.boards.find((item) => item.id === Number(archiveProject.dataset.archiveProject));
+        if (!board) return;
+
+        try {
+            await moveBoardTo(board.id, board.archived ? null : board.folder_id, !board.archived);
+        } catch (error) {
+            showMessage(elements.dashboardMessage, `Non riesco ad aggiornare l'archivio: ${error.message}`);
+        }
         return;
     }
 
-    if (event.target.closest('[data-disabled-write]')) {
-        showMessage(elements.dashboardMessage, 'Azione non collegata: questa dashboard usa solo le API Laravel di lettura.', true);
+    const deleteFolder = event.target.closest('[data-delete-folder]');
+    if (deleteFolder) {
+        const folder = state.folders.find((item) => item.id === Number(deleteFolder.dataset.deleteFolder));
+        if (!folder) return;
+
+        const hasInternalKan = boardCountForFolder(folder.id) > 0;
+        const fallbackArea = state.viewingArchived ? "nell'archivio" : 'in Principale';
+        const result = await confirmDialog(
+            hasInternalKan
+                ? `Eliminare la cartella "${folder.name}"? Puoi lasciare i Kan ${fallbackArea}, eliminarli, oppure archiviarli.`
+                : `Eliminare la cartella "${folder.name}"?`,
+            hasInternalKan ? ['delete', 'delete-kan', 'archive-kan'] : ['delete']
+        );
+
+        if (result === 'cancel') return;
+
+        try {
+            const folderIds = folderTreeIds(folder.id);
+            const folderBoards = state.boards.filter((board) => folderIds.includes(board.folder_id));
+
+            if (result === 'delete-kan') {
+                for (const board of folderBoards) {
+                    await request(`/api/boards/${board.id}`, { method: 'DELETE' });
+                }
+            }
+
+            if (result === 'archive-kan') {
+                for (const board of folderBoards) {
+                    await moveBoardTo(board.id, null, true);
+                }
+            }
+
+            await request(`/api/folders/${folder.id}`, { method: 'DELETE' });
+            if (state.currentFolderId === folder.id) state.currentFolderId = null;
+            await loadWorkspaceData();
+        } catch (error) {
+            showMessage(elements.dashboardMessage, error.message);
+            await loadWorkspaceData();
+        }
+        return;
+    }
+
+    const deleteBoard = event.target.closest('[data-delete-board]');
+    if (deleteBoard) {
+        const board = state.boards.find((item) => item.id === Number(deleteBoard.dataset.deleteBoard));
+        if (!board) return;
+
+        const result = await confirmDialog(`Eliminare il progetto "${board.name}" e tutti i suoi eventi?`);
+        if (result !== 'delete') return;
+
+        try {
+            await request(`/api/boards/${board.id}`, { method: 'DELETE' });
+            state.boards = state.boards.filter((item) => item.id !== board.id);
+            renderDashboard();
+        } catch (error) {
+            showMessage(elements.dashboardMessage, error.message);
+            await loadWorkspaceData();
+        }
     }
 });
-
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
         closeModals();
+        closeConfirmModal('cancel');
         return;
     }
 
@@ -710,6 +1069,7 @@ document.addEventListener('keydown', (event) => {
     }
 });
 
+attachQuickDropEvents();
 loadAuthenticatedUser()
     .catch(() => setGuestView())
     .finally(refreshIcons);
