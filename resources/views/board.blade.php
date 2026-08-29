@@ -22,6 +22,11 @@
         </div>
 
         <div class="toolbar">
+            <div class="board-presence" id="boardPresence" aria-label="Utenti online">
+                <span class="board-presence-status"><span class="board-presence-dot" aria-hidden="true"></span><span id="boardPresenceStatus">Online</span></span>
+                <div class="board-presence-users" id="boardPresenceUsers"></div>
+                <span class="board-presence-count" id="boardPresenceCount">0</span>
+            </div>
             <a class="btn home-link" data-back-to-projects href="/">&larr; Progetti</a>
             <button class="btn" type="button" id="openColumnModal">+ Colonna</button>
             <button class="btn btn-category" type="button" id="openCategoryModal">+ Categoria</button>

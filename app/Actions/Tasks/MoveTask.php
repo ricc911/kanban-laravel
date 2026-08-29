@@ -3,9 +3,11 @@
 namespace App\Actions\Tasks;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\TaskMoved;
 use App\Models\BoardColumn;
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class MoveTask
@@ -30,21 +32,32 @@ class MoveTask
             ]);
         }
 
+        $board = $task->board;
         $fromColumn = $task->column;
-        $task->update([
-            'board_column_id' => $targetColumn->id,
-            'position' => max(0, $position),
-        ]);
-        if ($fromColumn->id !== $targetColumn->id) {
-            $this->logger->execute($user, $task->board->workspace, 'task.moved', $task->board, $task, [
-                'task_title' => $task->title,
-                'from_column_id' => $fromColumn->id,
-                'from_column_name' => $fromColumn->name,
-                'to_column_id' => $targetColumn->id,
-                'to_column_name' => $targetColumn->name,
-            ]);
-        }
+        $newPosition = max(0, $position);
+        $columnChanged = $fromColumn->id !== $targetColumn->id;
+        $positionChanged = (int) $task->position !== $newPosition;
 
-        return $task->fresh();
+        return DB::transaction(function () use ($user, $task, $board, $fromColumn, $targetColumn, $newPosition, $columnChanged, $positionChanged): Task {
+            $task->update([
+                'board_column_id' => $targetColumn->id,
+                'position' => $newPosition,
+            ]);
+            $freshTask = $task->fresh();
+            if ($columnChanged) {
+                $this->logger->execute($user, $board->workspace, 'task.moved', $board, $freshTask, [
+                    'task_title' => $freshTask->title,
+                    'from_column_id' => $fromColumn->id,
+                    'from_column_name' => $fromColumn->name,
+                    'to_column_id' => $targetColumn->id,
+                    'to_column_name' => $targetColumn->name,
+                ]);
+            }
+            if ($columnChanged || $positionChanged) {
+                TaskMoved::dispatch($freshTask);
+            }
+
+            return $freshTask;
+        });
     }
 }

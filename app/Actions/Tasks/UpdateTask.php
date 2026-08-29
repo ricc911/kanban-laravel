@@ -3,9 +3,12 @@
 namespace App\Actions\Tasks;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\TaskUpdated;
 use App\Models\Category;
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class UpdateTask
@@ -36,32 +39,46 @@ class UpdateTask
             ]);
         }
 
+        $board = $task->board;
         $oldCategory = $task->category;
-        $oldDueAt = $task->due_at?->toISOString();
-        $newDueAt = $dueAt ? date(DATE_ATOM, strtotime($dueAt)) : null;
+        $oldDueAt = $task->due_at;
+        $newDueAt = $dueAt !== null ? Carbon::parse($dueAt) : null;
         $changes = [];
-        foreach (['title' => [$task->title, trim($title)], 'description' => [$task->description, $description], 'priority' => [$task->priority, $priority], 'due_at' => [$oldDueAt, $newDueAt]] as $field => [$old, $new]) {
+        foreach (['title' => [$task->title, trim($title)], 'description' => [$task->description, $description], 'priority' => [$task->priority, $priority]] as $field => [$old, $new]) {
             if ($old !== $new) {
                 $changes[$field] = ['old' => $old, 'new' => $new];
             }
         }
+        if (
+            ($oldDueAt === null) !== ($newDueAt === null) ||
+            ($oldDueAt !== null && $newDueAt !== null && ! $oldDueAt->equalTo($newDueAt))
+        ) {
+            $changes['due_at'] = [
+                'old' => $oldDueAt?->toISOString(),
+                'new' => $newDueAt?->toISOString(),
+            ];
+        }
         $oldCategoryValue = $oldCategory ? ['id' => $oldCategory->id, 'name' => $oldCategory->name] : null;
         $newCategoryValue = $category ? ['id' => $category->id, 'name' => $category->name] : null;
-        if ($oldCategoryValue != $newCategoryValue) {
+        if ($oldCategoryValue !== $newCategoryValue) {
             $changes['category'] = ['old' => $oldCategoryValue, 'new' => $newCategoryValue];
         }
 
-        $task->update([
-            'title' => trim($title),
-            'description' => $description,
-            'priority' => $priority,
-            'due_at' => $dueAt,
-            'category_id' => $category?->id,
-        ]);
-        if ($changes) {
-            $this->logger->execute($user, $task->board->workspace, 'task.updated', $task->board, $task, ['task_title' => $task->title, 'changes' => $changes]);
-        }
+        return DB::transaction(function () use ($user, $task, $board, $title, $description, $priority, $newDueAt, $category, $changes): Task {
+            $task->update([
+                'title' => trim($title),
+                'description' => $description,
+                'priority' => $priority,
+                'due_at' => $newDueAt,
+                'category_id' => $category?->id,
+            ]);
+            $freshTask = $task->fresh();
+            if ($changes) {
+                $this->logger->execute($user, $board->workspace, 'task.updated', $board, $freshTask, ['task_title' => $freshTask->title, 'changes' => $changes]);
+                TaskUpdated::dispatch($freshTask);
+            }
 
-        return $task->fresh();
+            return $freshTask;
+        });
     }
 }

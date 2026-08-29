@@ -1,5 +1,6 @@
 import '../css/board.css';
 import { formatActivity, formatActivityDate, formatActivityDetails } from './activity-log';
+import { subscribeToBoard, subscribeToBoardPresence } from './realtime';
 
 const DEFAULT_TASK_COLOR = '#2563eb';
 const DEFAULT_CATEGORY_COLOR = '#4f6f9f';
@@ -10,6 +11,17 @@ const state = {
     columns: [],
     categories: [],
     drag: null,
+    realtimeCleanup: null,
+    presenceCleanup: null,
+    realtimeRenderPending: false,
+    onlineBoardUsers: new Map(),
+    editingTaskId: null,
+    taskModalBaseline: {},
+    latestRemoteTask: null,
+    dirtyTaskFields: new Set(),
+    taskModalConflicts: new Map(),
+    taskModalRemoteChanged: false,
+    taskModalDeleted: false,
 };
 
 const elements = {
@@ -38,7 +50,9 @@ const elements = {
     taskColorText: document.querySelector('#colorText'),
     taskColorPreset: document.querySelector('#colorPreset'),
     taskModalTitle: document.querySelector('#taskModalTitle'),
+    taskSubmit: document.querySelector('#taskForm button[type="submit"]'),
     deleteTask: document.querySelector('#deleteTask'),
+    taskRealtimeStatus: null,
     categoryId: document.querySelector('#categoryId'),
     categoryName: document.querySelector('#categoryName'),
     categoryColor: document.querySelector('#categoryColor'),
@@ -58,10 +72,102 @@ const elements = {
     activityModal: document.querySelector('#activityModal'),
     openActivityModal: document.querySelector('#openActivityModal'),
     boardActivityList: document.querySelector('#boardActivityList'),
+    boardPresence: document.querySelector('#boardPresence'),
+    boardPresenceStatus: document.querySelector('#boardPresenceStatus'),
+    boardPresenceUsers: document.querySelector('#boardPresenceUsers'),
+    boardPresenceCount: document.querySelector('#boardPresenceCount'),
 };
 
 function boardId() {
     return document.body.dataset.boardId;
+}
+
+function normalizePresenceUser(user) {
+    if (!user || user.id === undefined || user.id === null) return null;
+
+    return {
+        id: String(user.id),
+        name: user.name || 'Utente',
+    };
+}
+
+function presenceInitials(name) {
+    return name
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0])
+        .join('')
+        .toUpperCase() || '?';
+}
+
+function renderOnlineBoardUsers() {
+    if (!elements.boardPresenceUsers) return;
+
+    const users = [...state.onlineBoardUsers.values()]
+        .sort((left, right) => left.name.localeCompare(right.name, 'it'));
+    const visibleUsers = users.slice(0, 5);
+    elements.boardPresenceUsers.replaceChildren();
+
+    visibleUsers.forEach((user) => {
+        const avatar = document.createElement('span');
+        avatar.className = 'board-presence-avatar';
+        avatar.textContent = presenceInitials(user.name);
+        avatar.title = user.name;
+        avatar.setAttribute('aria-label', user.name);
+        elements.boardPresenceUsers.append(avatar);
+    });
+
+    if (users.length > 5) {
+        const remaining = users.slice(5);
+        const more = document.createElement('span');
+        more.className = 'board-presence-avatar board-presence-more';
+        more.textContent = `+${remaining.length}`;
+        more.title = remaining.map((user) => user.name).join(', ');
+        more.setAttribute('aria-label', `Altri utenti online: ${more.title}`);
+        elements.boardPresenceUsers.append(more);
+    }
+
+    elements.boardPresenceCount.textContent = String(users.length);
+    elements.boardPresence.hidden = false;
+}
+
+function setPresenceOnline() {
+    elements.boardPresenceStatus.textContent = 'Online';
+    elements.boardPresence.classList.remove('is-offline');
+    renderOnlineBoardUsers();
+}
+
+function setPresenceOffline() {
+    state.onlineBoardUsers.clear();
+    elements.boardPresenceStatus.textContent = 'Offline';
+    elements.boardPresence.classList.add('is-offline');
+    renderOnlineBoardUsers();
+}
+
+function applyPresenceHere(users) {
+    state.onlineBoardUsers.clear();
+    (users ?? []).map(normalizePresenceUser).filter(Boolean).forEach((user) => {
+        state.onlineBoardUsers.set(user.id, user);
+    });
+    setPresenceOnline();
+}
+
+function applyPresenceJoining(user) {
+    const normalized = normalizePresenceUser(user);
+    if (!normalized) return;
+
+    state.onlineBoardUsers.set(normalized.id, normalized);
+    setPresenceOnline();
+}
+
+function applyPresenceLeaving(user) {
+    const normalized = normalizePresenceUser(user);
+    if (!normalized) return;
+
+    state.onlineBoardUsers.delete(normalized.id);
+    renderOnlineBoardUsers();
 }
 
 async function loadBoardActivity() {
@@ -215,6 +321,304 @@ function findTask(taskId) {
 
 function findTaskColumn(taskId) {
     return state.columns.find((column) => column.tasks.some((task) => task.id === String(taskId))) ?? null;
+}
+
+function removeTaskFromState(taskId) {
+    const id = String(taskId);
+    state.columns.forEach((column) => {
+        column.tasks = column.tasks.filter((task) => task.id !== id);
+    });
+}
+
+function upsertTaskInState(task) {
+    const normalized = normalizeTask(task);
+    removeTaskFromState(normalized.id);
+
+    if (normalized.archived) {
+        return;
+    }
+
+    const column = findColumn(normalized.board_column_id);
+    if (!column) {
+        return;
+    }
+
+    column.tasks.push(normalized);
+    column.tasks.sort((left, right) => left.position - right.position);
+}
+
+const editableTaskFields = {
+    title: elements.taskTitle,
+    description: elements.taskDescription,
+    priority: elements.taskPriority,
+    category_id: elements.categorySelect,
+    due_at: elements.taskDueAt,
+};
+
+function ensureTaskRealtimeStatus() {
+    if (elements.taskRealtimeStatus) return elements.taskRealtimeStatus;
+
+    const status = document.createElement('p');
+    status.className = 'task-realtime-status';
+    status.hidden = true;
+    status.setAttribute('aria-live', 'polite');
+    elements.taskForm.prepend(status);
+    elements.taskRealtimeStatus = status;
+
+    return status;
+}
+
+function taskFieldValue(field) {
+    const element = editableTaskFields[field];
+    if (!element) return null;
+
+    if (field === 'title') return element.value.trim();
+    return element.value || null;
+}
+
+function taskFieldValueFromTask(field, task) {
+    if (field === 'title') return task.title ?? '';
+    if (field === 'description') return task.description || null;
+    if (field === 'priority') return task.priority || null;
+    if (field === 'category_id') return task.category_id || null;
+    if (field === 'due_at') return toDateInput(task.due_at) || null;
+
+    return null;
+}
+
+function setTaskFieldValue(field, value) {
+    const element = editableTaskFields[field];
+    if (!element) return;
+
+    element.value = value ?? '';
+}
+
+function readableRemoteTaskValue(field, task) {
+    const value = taskFieldValueFromTask(field, task);
+
+    if (field === 'category_id') {
+        return value ? findCategory(value)?.name ?? `Categoria #${value}` : 'Nessuna categoria';
+    }
+    if (field === 'priority') return priorityLabel(value) || 'Nessuna';
+    if (field === 'due_at') return formatDate(task.due_at) || 'Nessuna scadenza';
+    if (field === 'description') return value || 'Nessuna descrizione';
+
+    return value || 'Nessuno';
+}
+
+function fieldConflictElement(field) {
+    const input = editableTaskFields[field];
+    const wrapper = input?.closest('.field');
+    if (!wrapper) return null;
+
+    let message = wrapper.querySelector('.task-remote-field-message');
+    if (!message) {
+        message = document.createElement('p');
+        message.className = 'task-remote-field-message';
+        message.hidden = true;
+        message.setAttribute('aria-live', 'polite');
+        wrapper.append(message);
+    }
+
+    return message;
+}
+
+function renderTaskModalRealtimeState() {
+    const status = ensureTaskRealtimeStatus();
+    const hasConflicts = state.taskModalConflicts.size > 0;
+
+    status.hidden = !state.taskModalRemoteChanged && !state.taskModalDeleted;
+    status.classList.toggle('is-conflict', hasConflicts || state.taskModalDeleted);
+    status.textContent = state.taskModalDeleted
+        ? 'Questo task è stato eliminato da un altro utente.'
+        : hasConflicts
+            ? 'Questo task è stato modificato anche da un altro utente.'
+            : 'Aggiornato in tempo reale';
+
+    Object.keys(editableTaskFields).forEach((field) => {
+        const message = fieldConflictElement(field);
+        const remoteTask = state.latestRemoteTask;
+        const conflict = state.taskModalConflicts.has(field);
+        message.hidden = !conflict || !remoteTask;
+        message.textContent = conflict && remoteTask
+            ? `Valore remoto: ${readableRemoteTaskValue(field, remoteTask)}`
+            : '';
+        editableTaskFields[field]?.classList.toggle('has-remote-conflict', conflict);
+    });
+}
+
+function clearTaskModalRealtimeState() {
+    state.editingTaskId = null;
+    state.taskModalBaseline = {};
+    state.latestRemoteTask = null;
+    state.dirtyTaskFields.clear();
+    state.taskModalConflicts.clear();
+    state.taskModalRemoteChanged = false;
+    state.taskModalDeleted = false;
+
+    if (elements.taskSubmit) elements.taskSubmit.disabled = false;
+    elements.deleteTask.disabled = false;
+    if (elements.taskRealtimeStatus) elements.taskRealtimeStatus.hidden = true;
+    Object.keys(editableTaskFields).forEach((field) => {
+        const message = fieldConflictElement(field);
+        message.hidden = true;
+        message.textContent = '';
+        editableTaskFields[field]?.classList.remove('has-remote-conflict');
+    });
+}
+
+function beginTaskModalEditing(task) {
+    clearTaskModalRealtimeState();
+    state.editingTaskId = String(task.id);
+    state.latestRemoteTask = normalizeTask(task);
+    Object.keys(editableTaskFields).forEach((field) => {
+        state.taskModalBaseline[field] = taskFieldValueFromTask(field, state.latestRemoteTask);
+    });
+}
+
+function syncOpenTaskModal(task) {
+    if (state.editingTaskId !== String(task.id) || state.taskModalDeleted) return;
+
+    state.latestRemoteTask = task;
+    state.taskModalRemoteChanged = true;
+
+    Object.keys(editableTaskFields).forEach((field) => {
+        const remoteValue = taskFieldValueFromTask(field, task);
+        const localValue = taskFieldValue(field);
+
+        if (!state.dirtyTaskFields.has(field)) {
+            setTaskFieldValue(field, remoteValue);
+            state.taskModalBaseline[field] = remoteValue;
+            state.taskModalConflicts.delete(field);
+        } else if (localValue !== remoteValue) {
+            state.taskModalConflicts.set(field, remoteValue);
+        }
+    });
+
+    elements.taskForm.dataset.columnId = String(task.board_column_id);
+    renderTaskModalRealtimeState();
+}
+
+function trackTaskFieldChange(field) {
+    if (!state.editingTaskId || state.taskModalDeleted) return;
+
+    const value = taskFieldValue(field);
+    if (value === state.taskModalBaseline[field]) {
+        state.dirtyTaskFields.delete(field);
+        if (state.taskModalConflicts.has(field) && state.latestRemoteTask) {
+            const remoteValue = taskFieldValueFromTask(field, state.latestRemoteTask);
+            setTaskFieldValue(field, remoteValue);
+            state.taskModalBaseline[field] = remoteValue;
+            state.taskModalConflicts.delete(field);
+        }
+    } else {
+        state.dirtyTaskFields.add(field);
+        if (state.latestRemoteTask && value === taskFieldValueFromTask(field, state.latestRemoteTask)) {
+            state.taskModalConflicts.delete(field);
+        }
+    }
+
+    renderTaskModalRealtimeState();
+}
+
+function markTaskDeletedRemotely() {
+    if (!state.editingTaskId) return;
+
+    state.taskModalDeleted = true;
+    elements.taskSubmit.disabled = true;
+    elements.deleteTask.disabled = true;
+    renderTaskModalRealtimeState();
+}
+
+function renderAfterRealtimeUpdate() {
+    if (state.drag) {
+        state.realtimeRenderPending = true;
+        return;
+    }
+
+    renderBoard();
+}
+
+function flushRealtimeRender() {
+    if (!state.drag && state.realtimeRenderPending) {
+        state.realtimeRenderPending = false;
+        renderBoard();
+    }
+}
+
+function applyRemoteTaskCreated(payload) {
+    if (Number(payload?.task?.board_id) !== Number(boardId())) return;
+
+    upsertTaskInState(payload.task);
+    renderAfterRealtimeUpdate();
+}
+
+function applyRemoteTaskUpdated(payload) {
+    if (Number(payload?.task?.board_id) !== Number(boardId())) return;
+
+    const remoteTask = normalizeTask(payload.task);
+    upsertTaskInState(remoteTask);
+    syncOpenTaskModal(remoteTask);
+    renderAfterRealtimeUpdate();
+}
+
+function applyRemoteTaskMoved(payload) {
+    if (Number(payload?.task?.board_id) !== Number(boardId())) return;
+
+    const remoteTask = normalizeTask(payload.task);
+    upsertTaskInState(remoteTask);
+    if (state.editingTaskId === String(remoteTask.id) && !state.taskModalDeleted) {
+        state.latestRemoteTask = remoteTask;
+        elements.taskForm.dataset.columnId = String(remoteTask.board_column_id);
+    }
+    renderAfterRealtimeUpdate();
+}
+
+function applyRemoteTaskDeleted(payload) {
+    if (Number(payload?.board_id) !== Number(boardId())) return;
+
+    removeTaskFromState(payload.task_id);
+    if (state.editingTaskId === String(payload.task_id)) {
+        markTaskDeletedRemotely();
+    }
+    renderAfterRealtimeUpdate();
+}
+
+function applyRemoteTasksReordered(payload) {
+    if (
+        Number(payload?.board_id) !== Number(boardId()) ||
+        !Array.isArray(payload?.tasks)
+    ) return;
+
+    const column = findColumn(payload.column_id);
+    if (!column) return;
+
+    const positions = new Map(payload.tasks.map((task) => [String(task.id), Number(task.position)]));
+    column.tasks.forEach((task) => {
+        if (positions.has(task.id)) {
+            task.position = positions.get(task.id);
+        }
+    });
+    column.tasks.sort((left, right) => left.position - right.position);
+    renderAfterRealtimeUpdate();
+}
+
+function subscribeToCurrentBoard() {
+    state.realtimeCleanup?.();
+    state.presenceCleanup?.();
+    state.realtimeCleanup = subscribeToBoard(boardId(), {
+        created: applyRemoteTaskCreated,
+        updated: applyRemoteTaskUpdated,
+        moved: applyRemoteTaskMoved,
+        deleted: applyRemoteTaskDeleted,
+        reordered: applyRemoteTasksReordered,
+    });
+    state.presenceCleanup = subscribeToBoardPresence(boardId(), {
+        here: applyPresenceHere,
+        joining: applyPresenceJoining,
+        leaving: applyPresenceLeaving,
+        error: setPresenceOffline,
+    });
 }
 
 function findCategory(categoryId) {
@@ -539,6 +943,12 @@ function setError(error) {
     state.board = null;
     state.columns = [];
     state.categories = [];
+    state.realtimeCleanup?.();
+    state.realtimeCleanup = null;
+    state.presenceCleanup?.();
+    state.presenceCleanup = null;
+    state.onlineBoardUsers.clear();
+    setPresenceOffline();
     elements.title.textContent = 'Errore database';
     elements.description.textContent = '';
     elements.description.hidden = true;
@@ -562,6 +972,7 @@ async function loadBoard() {
             .sort((left, right) => left.position - right.position);
 
         renderBoard();
+        subscribeToCurrentBoard();
     } catch (error) {
         setError(error);
     }
@@ -573,9 +984,11 @@ function openModal(id) {
 
 function closeModal(id) {
     document.getElementById(id)?.classList.remove('open');
+    if (id === 'taskModal') clearTaskModalRealtimeState();
 }
 
 function resetTaskForm() {
+    clearTaskModalRealtimeState();
     elements.taskForm.reset();
     elements.taskId.value = '';
     elements.taskModalTitle.textContent = 'Nuovo evento';
@@ -588,6 +1001,7 @@ function resetTaskForm() {
 }
 
 function editTask(task) {
+    beginTaskModalEditing(task);
     elements.taskId.value = task.id;
     elements.taskTitle.value = task.title;
     elements.taskDescription.value = task.description ?? '';
@@ -601,6 +1015,7 @@ function editTask(task) {
     elements.taskForm.dataset.columnId = String(task.board_column_id);
     elements.taskModalTitle.textContent = 'Modifica evento';
     elements.deleteTask.style.display = 'inline-flex';
+    renderTaskModalRealtimeState();
 }
 
 function resetCategoryForm() {
@@ -640,6 +1055,10 @@ function editColumn(column) {
 }
 
 async function saveTask() {
+    if (state.taskModalDeleted) {
+        throw new Error('Questo task è stato eliminato da un altro utente.');
+    }
+
     const id = elements.taskId.value;
     const categoryId = elements.categorySelect.value || null;
     const payload = {
@@ -658,8 +1077,14 @@ async function saveTask() {
             body: JSON.stringify(payload),
         });
         const updated = normalizeTask(response.data);
-        const column = findTaskColumn(id);
-        column.tasks = column.tasks.map((task) => (task.id === updated.id ? updated : task));
+        upsertTaskInState(updated);
+        state.latestRemoteTask = updated;
+        Object.keys(editableTaskFields).forEach((field) => {
+            state.taskModalBaseline[field] = taskFieldValueFromTask(field, updated);
+        });
+        state.dirtyTaskFields.clear();
+        state.taskModalConflicts.clear();
+        state.taskModalRemoteChanged = false;
         return;
     }
 
@@ -671,9 +1096,7 @@ async function saveTask() {
         body: JSON.stringify(payload),
     });
     const created = normalizeTask(response.data);
-    const column = findColumn(columnId);
-    column.tasks.push(created);
-    updateTaskPositions(column);
+    upsertTaskInState(created);
 }
 
 async function deleteCurrentTask() {
@@ -681,11 +1104,7 @@ async function deleteCurrentTask() {
     if (!id) return;
 
     await request(`/api/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    const column = findTaskColumn(id);
-    if (column) {
-        column.tasks = column.tasks.filter((task) => task.id !== id);
-        updateTaskPositions(column);
-    }
+    removeTaskFromState(id);
 }
 
 async function saveCategory() {
@@ -924,6 +1343,7 @@ function bindDragEvents() {
             state.drag = null;
             task.classList.remove('dragging');
             document.querySelectorAll('.dropzone').forEach((zone) => zone.classList.remove('drag-over'));
+            flushRealtimeRender();
         });
     });
 
@@ -942,6 +1362,7 @@ function bindDragEvents() {
             state.drag = null;
             header.closest('.category-group')?.classList.remove('group-dragging');
             document.querySelectorAll('.dropzone').forEach((zone) => zone.classList.remove('drag-over'));
+            flushRealtimeRender();
         });
     });
 
@@ -999,6 +1420,7 @@ function bindDragEvents() {
         header.addEventListener('dragend', () => {
             state.drag = null;
             column.classList.remove('column-dragging');
+            flushRealtimeRender();
         });
     });
 
@@ -1053,8 +1475,14 @@ document.querySelectorAll('.modal-backdrop').forEach((backdrop) => {
 
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
-        document.querySelectorAll('.modal-backdrop.open').forEach((modal) => modal.classList.remove('open'));
+        document.querySelectorAll('.modal-backdrop.open').forEach((modal) => closeModal(modal.id));
     }
+});
+
+Object.entries(editableTaskFields).forEach(([field, element]) => {
+    element.addEventListener(field === 'title' || field === 'description' ? 'input' : 'change', () => {
+        trackTaskFieldChange(field);
+    });
 });
 
 elements.taskColorPreset.addEventListener('change', (event) => {

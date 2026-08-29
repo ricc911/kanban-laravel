@@ -142,6 +142,82 @@
       gap: 10px;
     }
 
+    .board-presence {
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 8px;
+      border: 1px solid #29364a;
+      border-radius: 8px;
+      background: #101722;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .board-presence-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #b8d7c1;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .board-presence-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 0 3px rgba(74, 222, 128, .12);
+    }
+
+    .board-presence-users {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .board-presence-avatar {
+      width: 23px;
+      height: 23px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid rgba(147, 197, 253, .38);
+      border-radius: 50%;
+      background: #1d3557;
+      color: #dbeafe;
+      font-size: 9px;
+      font-weight: 800;
+      cursor: default;
+    }
+
+    .board-presence-more {
+      background: #182231;
+      color: #aebdce;
+    }
+
+    .board-presence-count {
+      min-width: 16px;
+      color: #8795a6;
+      font-size: 11px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .board-presence.is-offline {
+      color: #7f898d;
+    }
+
+    .board-presence.is-offline .board-presence-status {
+      color: #9ca3af;
+    }
+
+    .board-presence.is-offline .board-presence-dot {
+      background: #6b7280;
+      box-shadow: none;
+    }
+
     .btn {
       cursor: pointer;
       border: 1px solid var(--line);
@@ -904,4 +980,33 @@
 .column-dragging {
   opacity: .45;
   transform: scale(.985);
+}
+
+.task-realtime-status {
+  margin: -2px 0 14px;
+  padding: 9px 11px;
+  border: 1px solid rgba(96, 165, 250, .28);
+  border-radius: 8px;
+  background: rgba(37, 99, 235, .10);
+  color: #b9d4ff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.task-realtime-status.is-conflict {
+  border-color: rgba(248, 113, 113, .36);
+  background: rgba(127, 29, 29, .16);
+  color: #fecaca;
+}
+
+.task-remote-field-message {
+  margin: 6px 0 0;
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.field .has-remote-conflict {
+  border-color: rgba(251, 191, 36, .72);
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, .10);
 }

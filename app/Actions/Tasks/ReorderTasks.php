@@ -2,6 +2,7 @@
 
 namespace App\Actions\Tasks;
 
+use App\Events\TasksReordered;
 use App\Models\BoardColumn;
 use App\Models\Task;
 use App\Models\User;
@@ -52,13 +53,18 @@ class ReorderTasks
             ]);
         }
 
-        DB::transaction(function () use ($column, $taskIds) {
+        DB::transaction(function () use ($column, $taskIds): void {
+            $positions = [];
             foreach ($taskIds as $index => $taskId) {
+                $position = ($index + 1) * 1000;
                 Task::whereKey($taskId)->update([
                     'board_column_id' => $column->id,
-                    'position' => ($index + 1) * 1000,
+                    'position' => $position,
                 ]);
+                $positions[] = ['id' => (int) $taskId, 'position' => $position];
             }
+
+            TasksReordered::dispatch((int) $column->board_id, (int) $column->id, $positions);
         });
     }
 }

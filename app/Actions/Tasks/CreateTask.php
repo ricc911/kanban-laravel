@@ -3,11 +3,13 @@
 namespace App\Actions\Tasks;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\TaskCreated;
 use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Category;
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class CreateTask
@@ -45,20 +47,23 @@ class CreateTask
             ]);
         }
 
-        $position = (($column->tasks()->max('position') ?? 0) + 1000);
+        return DB::transaction(function () use ($user, $board, $column, $category, $title, $description, $priority, $dueAt): Task {
+            $position = (($column->tasks()->max('position') ?? 0) + 1000);
 
-        $task = Task::create([
-            'board_id' => $board->id,
-            'board_column_id' => $column->id,
-            'category_id' => $category?->id,
-            'title' => trim($title),
-            'description' => $description,
-            'priority' => $priority,
-            'due_at' => $dueAt,
-            'position' => $position,
-        ]);
-        $this->logger->execute($user, $board->workspace, 'task.created', $board, $task, ['task_title' => $task->title]);
+            $task = Task::create([
+                'board_id' => $board->id,
+                'board_column_id' => $column->id,
+                'category_id' => $category?->id,
+                'title' => trim($title),
+                'description' => $description,
+                'priority' => $priority,
+                'due_at' => $dueAt,
+                'position' => $position,
+            ]);
+            $this->logger->execute($user, $board->workspace, 'task.created', $board, $task, ['task_title' => $task->title]);
+            TaskCreated::dispatch($task);
 
-        return $task;
+            return $task;
+        });
     }
 }

@@ -3,8 +3,10 @@
 namespace App\Actions\Tasks;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\TaskDeleted;
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class DeleteTask
@@ -22,8 +24,14 @@ class DeleteTask
         }
 
         $board = $task->board;
+        $taskId = (int) $task->id;
+        $boardId = (int) $board->id;
         $title = $task->title;
-        $task->delete();
-        $this->logger->execute($user, $board->workspace, 'task.deleted', $board, null, ['task_title' => $title]);
+
+        DB::transaction(function () use ($user, $task, $board, $taskId, $boardId, $title): void {
+            $task->delete();
+            $this->logger->execute($user, $board->workspace, 'task.deleted', $board, null, ['task_title' => $title]);
+            TaskDeleted::dispatch($taskId, $boardId);
+        });
     }
 }
