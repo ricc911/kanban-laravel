@@ -2,6 +2,7 @@
 
 namespace App\Actions\Folders;
 
+use App\Actions\Activity\LogActivity;
 use App\Models\Board;
 use App\Models\Folder;
 use App\Models\User;
@@ -10,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 class ArchiveFolder
 {
+    public function __construct(private LogActivity $logger) {}
+
     public function execute(User $user, Folder $folder, bool $archived): Folder
     {
         if (! $folder->workspace->hasMember($user)) {
@@ -20,7 +23,7 @@ class ArchiveFolder
 
         $folderIds = $this->folderTreeIds($folder);
 
-        DB::transaction(function () use ($folder, $folderIds, $archived): void {
+        DB::transaction(function () use ($user, $folder, $folderIds, $archived): void {
             Folder::query()
                 ->where('workspace_id', $folder->workspace_id)
                 ->whereIn('id', $folderIds)
@@ -35,6 +38,7 @@ class ArchiveFolder
                 ->where('workspace_id', $folder->workspace_id)
                 ->whereIn('folder_id', $folderIds)
                 ->update(['archived' => $archived]);
+            $this->logger->execute($user, $folder->workspace, $archived ? 'folder.archived' : 'folder.restored', null, $folder, ['folder_name' => $folder->name]);
         });
 
         return $folder->fresh();

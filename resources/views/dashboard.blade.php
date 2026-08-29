@@ -92,12 +92,42 @@
                     <i class="icon" data-lucide="plus"></i>
                     Nuovo progetto
                 </button>
+                <button class="btn with-icon" type="button" data-account>
+                    <i class="icon" data-lucide="user"></i>
+                    Account
+                </button>
+                <button class="btn notification-button" type="button" data-notifications aria-label="Notifiche"><i class="icon" data-lucide="bell"></i><span class="notification-badge" data-notification-count hidden>0</span></button>
                 <button class="btn with-icon" type="button" data-logout>
                     <i class="icon" data-lucide="log-out"></i>
                     Esci
                 </button>
             </div>
         </header>
+
+        <aside class="notifications-panel" data-notifications-panel hidden>
+            <div class="notifications-head"><h2>Notifiche</h2><button class="close" type="button" data-close-notifications>&times;</button></div>
+            <div class="notifications-list" data-notifications-list></div>
+        </aside>
+
+        <div class="modal-backdrop" data-account-modal hidden>
+            <div class="modal">
+                <div class="modal-head"><h2>Account</h2><button class="close" type="button" data-close-modal>&times;</button></div>
+                <div class="modal-body">
+                    <form data-profile-form>
+                        <div class="field"><label for="accountName">Nome</label><input id="accountName" required maxlength="255" data-account-name></div>
+                        <div class="field"><label>Email</label><input type="email" disabled data-account-email></div>
+                        <div class="modal-actions"><button class="btn btn-primary" type="submit">Salva nome</button></div>
+                    </form>
+                    <form data-password-form>
+                        <div class="field"><label for="currentPassword">Password attuale</label><input id="currentPassword" type="password" required autocomplete="current-password" data-current-password></div>
+                        <div class="field"><label for="newPassword">Nuova password</label><input id="newPassword" type="password" required minlength="8" autocomplete="new-password" data-new-password></div>
+                        <div class="field"><label for="confirmPassword">Conferma password</label><input id="confirmPassword" type="password" required minlength="8" autocomplete="new-password" data-confirm-password></div>
+                        <div class="modal-actions"><button class="btn btn-primary" type="submit">Cambia password</button></div>
+                    </form>
+                    <p class="message" data-account-message hidden></p>
+                </div>
+            </div>
+        </div>
 
         <main class="page">
             <div class="page-head">
@@ -122,6 +152,10 @@
                         </div>
                     </div>
                     <div class="workspace-actions">
+                        <button class="btn with-icon" type="button" data-manage-workspace hidden>Gestisci workspace</button>
+                        <button class="btn with-icon" type="button" data-open-activity hidden>Cronologia</button>
+                        <button class="btn with-icon" type="button" data-new-workspace>Nuovo workspace</button>
+                        <button class="btn with-icon" type="button" data-accept-invitation>Accetta invito</button>
                         <button class="btn with-icon" type="button" data-new-folder>
                             <i class="icon" data-lucide="folder-plus"></i>
                             Nuova cartella
@@ -142,6 +176,42 @@
 
             <div class="status" data-status>Caricamento progetti...</div>
         </main>
+
+        <div class="modal-backdrop" data-workspace-modal hidden>
+            <div class="modal">
+                <div class="modal-head">
+                    <h2>Gestisci workspace</h2>
+                    <button class="close" type="button" data-close-modal>&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p><strong data-workspace-detail-name></strong><br><span data-workspace-detail-owner></span></p>
+                    <form class="workspace-invite-form" data-invite-form>
+                        <div class="field"><label for="inviteEmail">Invita membro</label><input id="inviteEmail" type="email" required placeholder="email@esempio.it" data-invite-email></div>
+                        <button class="btn btn-primary" type="submit">Invia invito</button>
+                    </form>
+                    <div class="field workspace-section"><label>Inviti pendenti</label><div data-pending-invitations></div></div>
+                    <div class="field workspace-section"><label>Membri</label><div data-workspace-members></div></div>
+                    <div class="modal-actions"><button class="btn btn-danger" type="button" data-leave-workspace>Lascia workspace</button></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-backdrop" data-activity-modal hidden>
+            <div class="modal activity-modal">
+                <div class="modal-head"><h2>Cronologia</h2><button class="close" type="button" data-close-modal>&times;</button></div>
+                <div class="modal-body"><div data-activity-list></div><button class="btn" type="button" data-activity-more hidden>Carica altre</button></div>
+            </div>
+        </div>
+
+        <div class="modal-backdrop" data-new-workspace-modal hidden>
+            <div class="modal">
+                <div class="modal-head"><h2>Nuovo workspace</h2><button class="close" type="button" data-close-modal>&times;</button></div>
+                <form class="modal-body" data-new-workspace-form>
+                    <div class="field"><label for="newWorkspaceName">Nome workspace</label><input id="newWorkspaceName" required maxlength="120" placeholder="Es. Marketing" data-new-workspace-name></div>
+                    <div class="modal-actions"><button class="btn" type="button" data-close-modal>Annulla</button><button class="btn btn-primary" type="submit">Crea workspace</button></div>
+                </form>
+            </div>
+        </div>
 
         <div class="quick-drop" data-quick-drop-shell>
             <div class="quick-drop-zone root" data-quick-drop="root">

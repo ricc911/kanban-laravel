@@ -2,6 +2,7 @@
 
 namespace App\Actions\Folders;
 
+use App\Actions\Activity\LogActivity;
 use App\Models\Board;
 use App\Models\Folder;
 use App\Models\User;
@@ -10,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 class MoveFolder
 {
+    public function __construct(private LogActivity $logger) {}
+
     public function execute(User $user, Folder $folder, ?Folder $parent = null): Folder
     {
         if (! $folder->workspace->hasMember($user)) {
@@ -41,10 +44,12 @@ class MoveFolder
             $ancestor = $ancestor->parent;
         }
 
+        $folder->loadMissing('parent');
+        $fromParent = $folder->parent;
         $archived = $parent?->archived ?? false;
         $folderIds = $this->folderTreeIds($folder);
 
-        DB::transaction(function () use ($folder, $parent, $folderIds, $archived): void {
+        DB::transaction(function () use ($user, $folder, $parent, $folderIds, $archived, $fromParent): void {
             $folder->update(['parent_id' => $parent?->id]);
 
             Folder::query()
@@ -56,6 +61,16 @@ class MoveFolder
                 ->where('workspace_id', $folder->workspace_id)
                 ->whereIn('folder_id', $folderIds)
                 ->update(['archived' => $archived]);
+
+            if ($fromParent?->id !== $parent?->id) {
+                $this->logger->execute($user, $folder->workspace, 'folder.moved', null, $folder, [
+                    'folder_name' => $folder->name,
+                    'from_parent_id' => $fromParent?->id,
+                    'from_parent_name' => $fromParent?->name,
+                    'to_parent_id' => $parent?->id,
+                    'to_parent_name' => $parent?->name,
+                ]);
+            }
         });
 
         return $folder->fresh();

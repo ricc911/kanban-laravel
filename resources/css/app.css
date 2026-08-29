@@ -662,6 +662,17 @@
       padding: 18px 20px 20px;
     }
 
+    .activity-modal {
+      max-height: min(760px, calc(100vh - 32px));
+      display: flex;
+      flex-direction: column;
+    }
+
+    .activity-modal .modal-body {
+      min-height: 0;
+      overflow-y: auto;
+    }
+
     .field {
       margin-bottom: 14px;
     }
@@ -729,6 +740,121 @@
       gap: 10px;
       padding-top: 5px;
     }
+
+    .workspace-invite-form {
+      margin-bottom: 22px;
+    }
+
+    .workspace-section {
+      margin-bottom: 20px;
+    }
+
+    .workspace-invitation {
+      color: #d9dfe1;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .notification-button {
+      position: relative;
+    }
+
+    .notification-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: #d87979;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 18px;
+    }
+
+    .notifications-panel {
+      position: fixed;
+      z-index: 20;
+      top: 70px;
+      right: 20px;
+      width: min(410px, calc(100vw - 30px));
+      max-height: min(620px, calc(100vh - 95px));
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #182333;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, .35);
+    }
+
+    .notifications-head {
+      padding: 20px 22px;
+    }
+
+    .notifications-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .notifications-list {
+      padding: 8px 0;
+    }
+
+    .notifications-list:empty {
+      min-height: 100px;
+    }
+
+    .notifications-list:not(:has(.notification-item)) {
+      padding: 25px 22px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .notifications-head h2 { margin: 0; font-size: 18px; }
+    .notification-item { display: grid; gap: 9px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+    .notification-item span,
+    .notification-item small { color: var(--muted); }
+    .notification-actions { display: flex; gap: 8px; margin-top: 5px; }
+
+    .activity-row {
+      display: grid;
+      gap: 4px;
+      padding: 13px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .activity-row span,
+    .activity-row small { color: var(--muted); }
+
+    .activity-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+    .activity-details-toggle {
+      margin-left: 0;
+      width: fit-content;
+      min-height: 32px;
+      border: 1px solid rgba(96,165,250,.34);
+      border-radius: 8px;
+      padding: 7px 10px;
+      background: #121b28;
+      color: #cfe0ff;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      transition: .16s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .activity-details-toggle .icon { width: 14px; height: 14px; }
+
+    .activity-details-toggle:hover,
+    .activity-details-toggle:focus-visible { background: #182231; border-color: #3a4a62; }
+
+    .activity-details { display: grid; gap: 5px; padding: 8px 0 2px; color: #cbd2d4; font-size: 13px; overflow-wrap: anywhere; }
 
     @media (max-width: 900px) {
       .projects {

@@ -1,4 +1,5 @@
 import '../css/board.css';
+import { formatActivity, formatActivityDate, formatActivityDetails } from './activity-log';
 
 const DEFAULT_TASK_COLOR = '#2563eb';
 const DEFAULT_CATEGORY_COLOR = '#4f6f9f';
@@ -54,11 +55,46 @@ const elements = {
     deleteColumnWithTasks: document.querySelector('#deleteColumnWithTasks'),
     moveColumnTasks: document.querySelector('#moveColumnTasks'),
     backToProjects: document.querySelector('[data-back-to-projects]'),
+    activityModal: document.querySelector('#activityModal'),
+    openActivityModal: document.querySelector('#openActivityModal'),
+    boardActivityList: document.querySelector('#boardActivityList'),
 };
 
 function boardId() {
     return document.body.dataset.boardId;
 }
+
+async function loadBoardActivity() {
+    const board = state.board;
+    if (!board) return;
+    const response = await request(`/api/workspaces/${board.workspace_id}/activity?board_id=${board.id}`);
+    elements.boardActivityList.replaceChildren();
+    (response.data ?? []).forEach((activity) => {
+        const row = document.createElement('div');
+        row.className = 'activity-row';
+        const actor = document.createElement('strong'); actor.textContent = activity.actor?.name ?? 'Utente';
+        const message = document.createElement('span'); message.textContent = formatActivity(activity);
+        const date = document.createElement('small'); date.textContent = formatActivityDate(activity.created_at);
+        const meta = document.createElement('div'); meta.className = 'activity-meta'; meta.append(date);
+        row.append(actor, message, meta);
+        const details = formatActivityDetails(activity);
+        if (details.length) {
+            const toggle = document.createElement('button'); toggle.className = 'activity-details-toggle'; toggle.type = 'button'; toggle.append(icon('chevron-down'), document.createTextNode('Dettagli')); toggle.setAttribute('aria-expanded', 'false');
+            const box = document.createElement('div'); box.className = 'activity-details'; box.hidden = true;
+            details.forEach((detail) => { const line = document.createElement('div'); line.textContent = `${detail.label}: ${detail.oldValue} → ${detail.newValue}`; box.append(line); });
+            toggle.onclick = () => { box.hidden = !box.hidden; toggle.replaceChildren(icon(box.hidden ? 'chevron-down' : 'chevron-up'), document.createTextNode(box.hidden ? 'Dettagli' : 'Nascondi')); toggle.setAttribute('aria-expanded', String(!box.hidden)); refreshIcons(); };
+            meta.append(toggle); row.append(box);
+        }
+        elements.boardActivityList.append(row);
+    });
+    refreshIcons();
+}
+
+elements.openActivityModal.addEventListener('click', async () => {
+    elements.activityModal.classList.add('open');
+    await loadBoardActivity();
+});
+document.querySelectorAll('[data-close="activityModal"]').forEach((button) => button.addEventListener('click', () => elements.activityModal.classList.remove('open')));
 
 function csrfToken() {
     const cookie = document.cookie

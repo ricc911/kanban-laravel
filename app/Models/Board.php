@@ -50,4 +50,9 @@ class Board extends Model
     {
         return $this->hasMany(Task::class);
     }
+
+    public function activityLogs(): HasMany
+    {
+        return $this->hasMany(ActivityLog::class);
+    }
 }

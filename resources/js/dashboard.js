@@ -22,9 +22,40 @@ const elements = {
     registerForm: document.querySelector('[data-register-form]'),
     loginForm: document.querySelector('[data-login-form]'),
     logoutButton: document.querySelector('[data-logout]'),
+    accountButton: document.querySelector('[data-account]'),
+    accountModal: document.querySelector('[data-account-modal]'),
+    profileForm: document.querySelector('[data-profile-form]'),
+    accountName: document.querySelector('[data-account-name]'),
+    accountEmail: document.querySelector('[data-account-email]'),
+    passwordForm: document.querySelector('[data-password-form]'),
+    currentPassword: document.querySelector('[data-current-password]'),
+    newPassword: document.querySelector('[data-new-password]'),
+    confirmPassword: document.querySelector('[data-confirm-password]'),
+    accountMessage: document.querySelector('[data-account-message]'),
     authMessage: document.querySelector('[data-auth-message]'),
     dashboardMessage: document.querySelector('[data-dashboard-message]'),
     workspaceSelect: document.querySelector('[data-workspace-select]'),
+    newWorkspaceButton: document.querySelector('[data-new-workspace]'),
+    newWorkspaceModal: document.querySelector('[data-new-workspace-modal]'),
+    newWorkspaceForm: document.querySelector('[data-new-workspace-form]'),
+    newWorkspaceName: document.querySelector('[data-new-workspace-name]'),
+    notificationsButton: document.querySelector('[data-notifications]'),
+    notificationCount: document.querySelector('[data-notification-count]'),
+    notificationsPanel: document.querySelector('[data-notifications-panel]'),
+    notificationsList: document.querySelector('[data-notifications-list]'),
+    manageWorkspaceButton: document.querySelector('[data-manage-workspace]'),
+    openActivityButton: document.querySelector('[data-open-activity]'),
+    activityModal: document.querySelector('[data-activity-modal]'),
+    activityList: document.querySelector('[data-activity-list]'),
+    activityMore: document.querySelector('[data-activity-more]'),
+    workspaceModal: document.querySelector('[data-workspace-modal]'),
+    workspaceDetailName: document.querySelector('[data-workspace-detail-name]'),
+    workspaceDetailOwner: document.querySelector('[data-workspace-detail-owner]'),
+    workspaceMembers: document.querySelector('[data-workspace-members]'),
+    pendingInvitations: document.querySelector('[data-pending-invitations]'),
+    inviteForm: document.querySelector('[data-invite-form]'),
+    inviteEmail: document.querySelector('[data-invite-email]'),
+    leaveWorkspace: document.querySelector('[data-leave-workspace]'),
     folderPath: document.querySelector('[data-folder-path]'),
     folderSection: document.querySelector('[data-folder-section]'),
     folders: document.querySelector('[data-folders]'),
@@ -238,6 +269,16 @@ function formatDate(value) {
     }).format(date);
 }
 
+function formatInvitationExpiry(value) {
+    if (!value) return 'scadenza non disponibile';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'scadenza non disponibile';
+
+    return `scade il ${new Intl.DateTimeFormat('it-IT', {
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).format(date)}`;
+}
+
 function boardUrl(board) {
     const params = new URLSearchParams();
 
@@ -264,12 +305,15 @@ function renderWorkspaceOptions() {
     state.workspaces.forEach((workspace) => {
         const option = document.createElement('option');
         option.value = workspace.id;
-        option.textContent = workspace.name;
+        option.textContent = `${workspace.name} (${workspace.type === 'shared' ? 'condiviso' : 'personale'})`;
         option.selected = Number(workspace.id) === Number(state.workspaceId);
         elements.workspaceSelect.append(option);
     });
 
     elements.workspaceSelect.hidden = state.workspaces.length <= 1;
+    const workspace = activeWorkspace();
+    elements.manageWorkspaceButton.hidden = workspace?.type !== 'shared';
+    elements.openActivityButton.hidden = !workspace;
 }
 
 function renderFolderPath() {
@@ -534,6 +578,18 @@ async function loadAuthenticatedUser() {
     elements.auth.hidden = true;
     elements.dashboard.hidden = false;
     await loadWorkspaceData();
+    await loadInvitations();
+}
+
+async function loadWorkspaces() {
+    const response = await request('/api/workspaces');
+    state.workspaces = response.data ?? [];
+
+    if (!state.workspaces.some((workspace) => Number(workspace.id) === Number(state.workspaceId))) {
+        state.workspaceId = state.workspaces[0]?.id ?? null;
+    }
+
+    await loadWorkspaceData();
 }
 
 function setGuestView() {
@@ -604,6 +660,22 @@ function closeFolderModal() {
 function closeModals() {
     closeProjectModal();
     closeFolderModal();
+    elements.workspaceModal.classList.remove('open');
+    elements.workspaceModal.hidden = true;
+    elements.activityModal.classList.remove('open');
+    elements.activityModal.hidden = true;
+    [elements.newWorkspaceModal].forEach((modal) => {
+        modal.classList.remove('open');
+        modal.hidden = true;
+    });
+    elements.accountModal.classList.remove('open');
+    elements.accountModal.hidden = true;
+}
+
+function openWorkspaceModal() {
+    elements.workspaceModal.hidden = false;
+    elements.workspaceModal.classList.add('open');
+    refreshIcons();
 }
 
 function confirmDialog(message, actions = ['delete']) {
@@ -859,6 +931,34 @@ elements.logoutButton.addEventListener('click', async () => {
     }
 });
 
+elements.accountButton.addEventListener('click', () => {
+    elements.accountName.value = state.user?.name ?? '';
+    elements.accountEmail.value = state.user?.email ?? '';
+    elements.accountMessage.hidden = true;
+    elements.accountModal.hidden = false;
+    elements.accountModal.classList.add('open');
+});
+
+elements.profileForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+        const response = await request('/api/account/profile', { method: 'PATCH', body: JSON.stringify({ name: elements.accountName.value.trim() }) });
+        state.user = response.data;
+        elements.accountMessage.textContent = 'Nome aggiornato.';
+        elements.accountMessage.hidden = false;
+    } catch (error) { elements.accountMessage.textContent = error.message; elements.accountMessage.hidden = false; }
+});
+
+elements.passwordForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+        await request('/api/account/password', { method: 'PATCH', body: JSON.stringify({ current_password: elements.currentPassword.value, password: elements.newPassword.value, password_confirmation: elements.confirmPassword.value }) });
+        elements.passwordForm.reset();
+        elements.accountMessage.textContent = 'Password aggiornata.';
+        elements.accountMessage.hidden = false;
+    } catch (error) { elements.accountMessage.textContent = error.message; elements.accountMessage.hidden = false; }
+});
+
 elements.workspaceSelect.addEventListener('change', async (event) => {
     state.workspaceId = Number(event.target.value);
     state.currentFolderId = null;
@@ -881,6 +981,147 @@ elements.archivedButton.addEventListener('click', () => {
 
 elements.newProjectButton.addEventListener('click', () => openProjectModal());
 elements.newFolderButton.addEventListener('click', () => openFolderModal());
+elements.newWorkspaceButton.addEventListener('click', async () => {
+    elements.newWorkspaceModal.hidden = false;
+    elements.newWorkspaceModal.classList.add('open');
+    elements.newWorkspaceName.focus();
+});
+
+elements.newWorkspaceForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try { await request('/api/workspaces', { method: 'POST', body: JSON.stringify({ name: elements.newWorkspaceName.value.trim() }) }); closeModals(); await loadWorkspaces(); }
+    catch (error) { showMessage(elements.dashboardMessage, error.message); }
+});
+
+
+async function loadWorkspaceManagement() {
+    const workspace = activeWorkspace();
+    if (!workspace) return;
+    elements.workspaceDetailName.textContent = workspace.name;
+    elements.workspaceDetailOwner.textContent = `Owner: ${workspace.owner?.name ?? workspace.owner?.email ?? '—'}`;
+    const [members, invitations] = await Promise.all([
+        request(`/api/workspaces/${workspace.id}/members`),
+        request(`/api/workspaces/${workspace.id}/invitations`),
+    ]);
+    elements.workspaceMembers.replaceChildren();
+    (members.data ?? []).forEach((member) => {
+        const row = document.createElement('div');
+        row.textContent = `${member.name} — ${member.pivot?.role ?? 'member'}`;
+        if (Number(member.id) !== Number(workspace.owner_id) && Number(workspace.owner_id) === Number(state.user?.id)) {
+            const remove = document.createElement('button');
+            remove.className = 'btn btn-danger'; remove.textContent = 'Rimuovi';
+            remove.onclick = async () => { await request(`/api/workspaces/${workspace.id}/members/${member.id}`, { method: 'DELETE' }); await loadWorkspaceManagement(); };
+            row.append(' ', remove);
+        }
+        elements.workspaceMembers.append(row);
+    });
+    elements.pendingInvitations.replaceChildren();
+    const pending = invitations.data ?? [];
+    if (!pending.length) {
+        elements.pendingInvitations.textContent = 'Nessun invito pendente.';
+    } else {
+        pending.forEach((item) => {
+            const invitation = document.createElement('div');
+            invitation.className = 'workspace-invitation';
+            invitation.textContent = `${item.email} — ${formatInvitationExpiry(item.expires_at)}`;
+            elements.pendingInvitations.append(invitation);
+        });
+    }
+}
+
+elements.manageWorkspaceButton.addEventListener('click', async () => {
+    openWorkspaceModal();
+    try { await loadWorkspaceManagement(); } catch (error) { showMessage(elements.dashboardMessage, error.message); }
+});
+
+let activityPage = 1;
+async function loadActivity(append = false) {
+    const response = await request(`/api/workspaces/${state.workspaceId}/activity?page=${activityPage}`);
+    const rows = response.data ?? [];
+    if (!append) elements.activityList.replaceChildren();
+    rows.forEach((activity) => {
+        const row = document.createElement('div');
+        row.className = 'activity-row';
+        const actor = document.createElement('strong'); actor.textContent = activity.actor?.name ?? 'Utente';
+        const text = document.createElement('span'); text.textContent = formatActivity(activity);
+        const date = document.createElement('small'); date.textContent = formatActivityDate(activity.created_at);
+        const meta = document.createElement('div'); meta.className = 'activity-meta'; meta.append(date);
+        row.append(actor, text, meta);
+        const details = formatActivityDetails(activity);
+        if (details.length) {
+            const toggle = document.createElement('button'); toggle.className = 'activity-details-toggle'; toggle.type = 'button'; toggle.append(icon('chevron-down'), document.createTextNode('Dettagli')); toggle.setAttribute('aria-expanded', 'false');
+            const box = document.createElement('div'); box.className = 'activity-details'; box.hidden = true;
+            details.forEach((detail) => { const line = document.createElement('div'); line.textContent = `${detail.label}: ${detail.oldValue} → ${detail.newValue}`; box.append(line); });
+            toggle.onclick = () => { box.hidden = !box.hidden; toggle.replaceChildren(icon(box.hidden ? 'chevron-down' : 'chevron-up'), document.createTextNode(box.hidden ? 'Dettagli' : 'Nascondi')); toggle.setAttribute('aria-expanded', String(!box.hidden)); refreshIcons(); };
+            meta.append(toggle); row.append(box);
+        }
+        elements.activityList.append(row);
+    });
+    if (!rows.length && !append) elements.activityList.textContent = 'Nessuna attività.';
+    elements.activityMore.hidden = !response.next_page_url;
+    refreshIcons();
+}
+elements.openActivityButton.addEventListener('click', async () => { elements.activityModal.hidden = false; elements.activityModal.classList.add('open'); activityPage = 1; await loadActivity(); });
+elements.activityMore.addEventListener('click', async () => { activityPage += 1; await loadActivity(true); });
+elements.inviteForm.addEventListener('submit', async (event) => { event.preventDefault(); try { await request(`/api/workspaces/${state.workspaceId}/invitations`, { method: 'POST', body: JSON.stringify({ email: elements.inviteEmail.value }) }); elements.inviteForm.reset(); await loadWorkspaceManagement(); } catch (error) { showMessage(elements.dashboardMessage, error.message); } });
+
+async function loadInvitations() {
+    const response = await request('/api/invitations');
+    const invitations = response.data ?? [];
+    elements.notificationCount.textContent = String(invitations.length);
+    elements.notificationCount.hidden = invitations.length === 0;
+    elements.notificationsList.replaceChildren();
+
+    if (!invitations.length) {
+        elements.notificationsList.textContent = 'Nessuna notifica.';
+        return;
+    }
+
+    invitations.forEach((invitation) => {
+        const item = document.createElement('div');
+        item.className = 'notification-item';
+        item.dataset.invitationToken = invitation.token;
+        item.dataset.invitationId = String(invitation.id);
+        const workspace = document.createElement('strong');
+        workspace.textContent = invitation.workspace?.name ?? 'Workspace';
+        const message = document.createElement('span');
+        message.textContent = `${invitation.workspace?.owner?.name ?? 'Un utente'} ti ha invitato nel workspace`;
+        const expiry = document.createElement('small');
+        expiry.textContent = `Scade il ${new Intl.DateTimeFormat('it-IT').format(new Date(invitation.expires_at))}`;
+        const actions = document.createElement('div');
+        actions.className = 'notification-actions';
+        const accept = document.createElement('button');
+        accept.className = 'btn btn-primary'; accept.type = 'button'; accept.dataset.acceptInvitation = '';
+        accept.textContent = 'Accetta';
+        const reject = document.createElement('button');
+        reject.className = 'btn'; reject.type = 'button'; reject.dataset.rejectInvitation = '';
+        reject.textContent = 'Rifiuta';
+        actions.append(accept, reject);
+        item.append(workspace, message, expiry, actions);
+        elements.notificationsList.append(item);
+    });
+}
+
+elements.notificationsButton.addEventListener('click', async () => {
+    elements.notificationsPanel.hidden = !elements.notificationsPanel.hidden;
+    if (!elements.notificationsPanel.hidden) await loadInvitations();
+});
+document.querySelector('[data-close-notifications]').addEventListener('click', () => { elements.notificationsPanel.hidden = true; });
+elements.notificationsList.addEventListener('click', async (event) => {
+    const item = event.target.closest('[data-invitation-token]');
+    if (!item) return;
+    try {
+        if (event.target.closest('[data-accept-invitation]')) {
+            await request(`/api/invitations/${item.dataset.invitationToken}/accept`, { method: 'POST' });
+            await loadWorkspaces();
+        } else if (event.target.closest('[data-reject-invitation]')) {
+            await request(`/api/invitations/${item.dataset.invitationId}`, { method: 'DELETE' });
+        } else return;
+        await loadInvitations();
+    } catch (error) { showMessage(elements.dashboardMessage, error.message); }
+});
+
+elements.leaveWorkspace.addEventListener('click', async () => { if (!window.confirm('Vuoi lasciare questo workspace?')) return; try { await request(`/api/workspaces/${state.workspaceId}/leave`, { method: 'DELETE' }); closeModals(); await loadWorkspaces(); } catch (error) { showMessage(elements.dashboardMessage, error.message); } });
 
 elements.projectForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -1073,3 +1314,4 @@ attachQuickDropEvents();
 loadAuthenticatedUser()
     .catch(() => setGuestView())
     .finally(refreshIcons);
+import { formatActivity, formatActivityDate, formatActivityDetails } from './activity-log';

@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\AccountController;
+use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\BoardColumnController;
 use App\Http\Controllers\Api\BoardController;
 use App\Http\Controllers\Api\CategoryController;
@@ -13,7 +15,14 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->scopeBindings()->group(function (): void {
     Route::post('workspaces', [WorkspaceController::class, 'store']);
     Route::post('workspaces/{workspace}/invitations', [InvitationController::class, 'store']);
+    Route::get('workspaces/{workspace}/members', [WorkspaceController::class, 'members']);
+    Route::get('workspaces/{workspace}/invitations', [WorkspaceController::class, 'invitations']);
+    Route::get('workspaces/{workspace}/activity', [ActivityLogController::class, 'index']);
+    Route::delete('workspaces/{workspace}/members/{member}', [WorkspaceController::class, 'removeMember'])->withoutScopedBindings();
+    Route::delete('workspaces/{workspace}/leave', [WorkspaceController::class, 'leave']);
     Route::post('invitations/{token}/accept', [InvitationController::class, 'accept']);
+    Route::get('invitations', [InvitationController::class, 'index']);
+    Route::delete('invitations/{invitation}', [InvitationController::class, 'reject']);
 
     Route::post('workspaces/{workspace}/folders', [FolderController::class, 'store']);
     Route::patch('folders/{folder}', [FolderController::class, 'update']);
@@ -45,6 +54,8 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function (): void {
     Route::get('/user', function (Request $request) {
         return response()->json($request->user());
     });
+    Route::patch('account/profile', [AccountController::class, 'updateProfile']);
+    Route::patch('account/password', [AccountController::class, 'updatePassword']);
 
     Route::get('workspaces', [WorkspaceController::class, 'index']);
     Route::get('workspaces/{workspace}/folders', [FolderController::class, 'index']);

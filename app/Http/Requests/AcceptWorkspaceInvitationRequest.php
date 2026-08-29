@@ -25,7 +25,7 @@ class AcceptWorkspaceInvitationRequest extends FormRequest
         return ['token' => ['required', 'string', 'size:64']];
     }
 
-    protected function validationData(): array
+    public function validationData(): array
     {
         return [...$this->all(), 'token' => $this->route('token')];
     }

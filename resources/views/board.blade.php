@@ -26,8 +26,16 @@
             <button class="btn" type="button" id="openColumnModal">+ Colonna</button>
             <button class="btn btn-category" type="button" id="openCategoryModal">+ Categoria</button>
             <button class="btn btn-primary" type="button" id="openTaskModal">+ Evento</button>
+            <button class="btn" type="button" id="openActivityModal">Cronologia</button>
         </div>
     </header>
+
+    <div class="modal-backdrop" id="activityModal">
+        <div class="modal activity-modal" role="dialog" aria-modal="true" aria-labelledby="activityModalTitle">
+            <div class="modal-head"><h2 id="activityModalTitle">Cronologia</h2><button class="close" type="button" data-close="activityModal">&times;</button></div>
+            <div class="modal-body"><div id="boardActivityList"></div></div>
+        </div>
+    </div>
 
     <main class="page">
         <div class="page-head">

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Workspaces;
 
+use App\Actions\Activity\LogActivity;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceInvitation;
@@ -10,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 class InviteWorkspaceMember
 {
+    public function __construct(private LogActivity $logger) {}
+
     public function execute(
         User $actor,
         Workspace $workspace,
@@ -27,9 +30,16 @@ class InviteWorkspaceMember
 
         $membersCount = $workspace->members()->count();
 
+        $pendingInvitationsCount = $workspace->invitations()
+            ->whereNull('accepted_at')
+            ->where('expires_at', '>', now())
+            ->count();
+
+        $occupiedSlots = $membersCount + $pendingInvitationsCount;
+
         if (
             $plan->max_members_per_workspace !== null &&
-            $membersCount >= $plan->max_members_per_workspace
+            $occupiedSlots >= $plan->max_members_per_workspace
         ) {
             throw ValidationException::withMessages([
                 'workspace' => 'Hai raggiunto il limite di membri del workspace.',
@@ -48,7 +58,7 @@ class InviteWorkspaceMember
             ]);
         }
 
-        return WorkspaceInvitation::updateOrCreate(
+        $invitation = WorkspaceInvitation::updateOrCreate(
             [
                 'workspace_id' => $workspace->id,
                 'email' => $email,
@@ -60,5 +70,8 @@ class InviteWorkspaceMember
                 'accepted_at' => null,
             ]
         );
+        $this->logger->execute($actor, $workspace, 'workspace.member_invited', null, $invitation, ['email' => $email]);
+
+        return $invitation;
     }
 }

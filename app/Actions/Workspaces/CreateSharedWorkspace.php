@@ -2,6 +2,7 @@
 
 namespace App\Actions\Workspaces;
 
+use App\Actions\Activity\LogActivity;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\DB;
@@ -9,6 +10,8 @@ use Illuminate\Validation\ValidationException;
 
 class CreateSharedWorkspace
 {
+    public function __construct(private LogActivity $logger) {}
+
     public function execute(User $user, string $name): Workspace
     {
         $subscription = $user->subscription()
@@ -41,6 +44,7 @@ class CreateSharedWorkspace
                 'role' => 'owner',
                 'joined_at' => now(),
             ]);
+            $this->logger->execute($user, $workspace, 'workspace.created', null, $workspace, ['workspace_name' => $workspace->name]);
 
             return $workspace;
         });

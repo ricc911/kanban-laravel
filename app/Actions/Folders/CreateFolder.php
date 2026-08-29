@@ -2,6 +2,7 @@
 
 namespace App\Actions\Folders;
 
+use App\Actions\Activity\LogActivity;
 use App\Models\Folder;
 use App\Models\User;
 use App\Models\Workspace;
@@ -9,6 +10,8 @@ use Illuminate\Validation\ValidationException;
 
 class CreateFolder
 {
+    public function __construct(private LogActivity $logger) {}
+
     public function execute(
         User $user,
         Workspace $workspace,
@@ -31,11 +34,14 @@ class CreateFolder
             ]);
         }
 
-        return Folder::create([
+        $folder = Folder::create([
             'workspace_id' => $workspace->id,
             'parent_id' => $parent?->id,
             'name' => trim($name),
             'color' => $color,
         ]);
+        $this->logger->execute($user, $workspace, 'folder.created', null, $folder, ['folder_name' => $folder->name]);
+
+        return $folder;
     }
 }

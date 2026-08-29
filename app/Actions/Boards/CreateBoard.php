@@ -2,6 +2,7 @@
 
 namespace App\Actions\Boards;
 
+use App\Actions\Activity\LogActivity;
 use App\Models\Board;
 use App\Models\Folder;
 use App\Models\User;
@@ -11,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 class CreateBoard
 {
+    public function __construct(private LogActivity $logger) {}
+
     public function execute(
         User $user,
         Workspace $workspace,
@@ -48,7 +51,7 @@ class CreateBoard
             ]);
         }
 
-        return DB::transaction(function () use ($workspace, $folder, $name, $color) {
+        return DB::transaction(function () use ($user, $workspace, $folder, $name, $color) {
             $board = Board::create([
                 'workspace_id' => $workspace->id,
                 'folder_id' => $folder?->id,
@@ -70,6 +73,8 @@ class CreateBoard
                     'position' => 3000,
                 ],
             ]);
+
+            $this->logger->execute($user, $workspace, 'board.created', $board, $board, ['board_name' => $board->name]);
 
             return $board->load('columns');
         });

@@ -53,6 +53,11 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    public function activityLogs(): HasMany
+    {
+        return $this->hasMany(ActivityLog::class, 'actor_id');
+    }
+
     public function isMemberOf(Workspace $workspace): bool
     {
         return $workspace->hasMember($this);

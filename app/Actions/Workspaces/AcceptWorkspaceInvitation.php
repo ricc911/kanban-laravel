@@ -2,6 +2,7 @@
 
 namespace App\Actions\Workspaces;
 
+use App\Actions\Activity\LogActivity;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceInvitation;
@@ -10,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 class AcceptWorkspaceInvitation
 {
+    public function __construct(private LogActivity $logger) {}
+
     public function execute(
         User $user,
         string $token
@@ -48,7 +51,7 @@ class AcceptWorkspaceInvitation
             ]);
         }
 
-        DB::transaction(function () use ($workspace, $user, $invitation) {
+        DB::transaction(function () use ($workspace, $user, $invitation): void {
             $workspace->members()->syncWithoutDetaching([
                 $user->id => [
                     'role' => $invitation->role,
@@ -59,6 +62,7 @@ class AcceptWorkspaceInvitation
             $invitation->update([
                 'accepted_at' => now(),
             ]);
+            $this->logger->execute($user, $workspace, 'workspace.member_joined', null, $workspace, ['member_name' => $user->name]);
         });
 
         return $workspace;

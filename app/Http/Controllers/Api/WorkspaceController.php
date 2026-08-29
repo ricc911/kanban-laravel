@@ -3,10 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Workspaces\CreateSharedWorkspace;
+use App\Actions\Workspaces\LeaveWorkspace;
+use App\Actions\Workspaces\RemoveWorkspaceMember;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\LeaveWorkspaceRequest;
+use App\Http\Requests\RemoveWorkspaceMemberRequest;
 use App\Http\Requests\StoreSharedWorkspaceRequest;
+use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class WorkspaceController extends Controller
 {
@@ -27,5 +34,33 @@ class WorkspaceController extends Controller
         return response()->json([
             'data' => $workspaces,
         ]);
+    }
+
+    public function members(Request $request, Workspace $workspace): JsonResponse
+    {
+        Gate::authorize('view', $workspace);
+
+        return response()->json(['data' => $workspace->load('owner:id,name,email')->members()->get()]);
+    }
+
+    public function invitations(Request $request, Workspace $workspace): JsonResponse
+    {
+        Gate::authorize('view', $workspace);
+
+        return response()->json(['data' => $workspace->invitations()->whereNull('accepted_at')->where('expires_at', '>', now())->latest()->get()]);
+    }
+
+    public function removeMember(RemoveWorkspaceMemberRequest $request, Workspace $workspace, User $member, RemoveWorkspaceMember $action): JsonResponse
+    {
+        $action->execute($request->user(), $workspace, $member);
+
+        return response()->json(status: 204);
+    }
+
+    public function leave(LeaveWorkspaceRequest $request, Workspace $workspace, LeaveWorkspace $action): JsonResponse
+    {
+        $action->execute($request->user(), $workspace);
+
+        return response()->json(status: 204);
     }
 }
