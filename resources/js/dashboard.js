@@ -22,6 +22,7 @@ const state = {
     invitations: [],
     activities: [],
     activityHasMore: false,
+    activityDayExpandedByUser: false,
     activityPage: 1,
     activityOpenDay: null,
     dashboardMessageTimeout: null,
@@ -1337,7 +1338,11 @@ function renderActivityList() {
         heading.className = 'activity-day-heading'; heading.type = 'button';
         heading.append(icon(day === openDay ? 'chevron-down' : 'chevron-right'), document.createTextNode(formatActivityDay(day)));
         const content = document.createElement('div'); content.className = 'activity-day-content'; content.hidden = day !== openDay;
-        heading.onclick = () => { state.activityOpenDay = openDay === day ? null : day; renderActivityList(); };
+        heading.onclick = () => {
+            state.activityOpenDay = openDay === day ? null : day;
+            state.activityDayExpandedByUser = state.activityOpenDay !== null;
+            renderActivityList();
+        };
         section.append(heading, content); elements.activityList.append(section);
         activities.forEach((activity) => {
         const row = document.createElement('div');
@@ -1383,7 +1388,7 @@ function renderActivityList() {
         content.append(row);
         });
     });
-    elements.activityMore.hidden = !state.activityHasMore || state.activityOpenDay === null;
+    elements.activityMore.hidden = !state.activityHasMore || state.activityOpenDay === null || !state.activityDayExpandedByUser;
     refreshIcons();
 }
 
@@ -1399,9 +1404,9 @@ async function loadActivity(append = false) {
     });
     renderActivityList();
     state.activityHasMore = Boolean(response.next_page_url);
-    elements.activityMore.hidden = !state.activityHasMore || state.activityOpenDay === null;
+    elements.activityMore.hidden = !state.activityHasMore || state.activityOpenDay === null || !state.activityDayExpandedByUser;
 }
-elements.openActivityButton.addEventListener('click', async () => { elements.activityModal.hidden = false; elements.activityModal.classList.add('open'); activityPage = 1; state.activityOpenDay = activityDayKey(new Date()); await loadActivity(); });
+elements.openActivityButton.addEventListener('click', async () => { elements.activityModal.hidden = false; elements.activityModal.classList.add('open'); activityPage = 1; state.activityOpenDay = activityDayKey(new Date()); state.activityDayExpandedByUser = false; await loadActivity(); });
 elements.activityMore.addEventListener('click', async () => { activityPage += 1; await loadActivity(true); });
 elements.inviteForm.addEventListener('submit', async (event) => { event.preventDefault(); try { await request(`/api/workspaces/${state.workspaceId}/invitations`, { method: 'POST', body: JSON.stringify({ email: elements.inviteEmail.value }) }); elements.inviteForm.reset(); await loadWorkspaceManagement(); } catch (error) { showMessage(elements.dashboardMessage, error.message); } });
 
@@ -1466,7 +1471,18 @@ elements.notificationsList.addEventListener('click', async (event) => {
     } catch (error) { showMessage(elements.dashboardMessage, error.message); }
 });
 
-elements.leaveWorkspace.addEventListener('click', async () => { if (!window.confirm('Vuoi lasciare questo workspace?')) return; try { await request(`/api/workspaces/${state.workspaceId}/leave`, { method: 'DELETE' }); closeModals(); await loadWorkspaces(); } catch (error) { showMessage(elements.dashboardMessage, error.message); } });
+elements.leaveWorkspace.addEventListener('click', async () => {
+    const result = await confirmDialog('Vuoi lasciare questo workspace?');
+    if (result !== 'delete') return;
+
+    try {
+        await request(`/api/workspaces/${state.workspaceId}/leave`, { method: 'DELETE' });
+        closeModals();
+        await loadWorkspaces();
+    } catch (error) {
+        showMessage(elements.dashboardMessage, error.message);
+    }
+});
 
 elements.deleteWorkspace.addEventListener('click', async () => {
     const workspace = activeWorkspace();
