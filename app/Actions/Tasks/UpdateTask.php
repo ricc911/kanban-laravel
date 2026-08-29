@@ -43,6 +43,7 @@ class UpdateTask
         $board = $task->board;
         $oldCategory = $task->category;
         $oldDueAt = $task->due_at;
+        $newColor = $color ?? $task->color;
         $newDueAt = $dueAt !== null ? Carbon::parse($dueAt) : null;
         $changes = [];
         foreach (['title' => [$task->title, trim($title)], 'description' => [$task->description, $description], 'priority' => [$task->priority, $priority]] as $field => [$old, $new]) {
@@ -65,14 +66,14 @@ class UpdateTask
             $changes['category'] = ['old' => $oldCategoryValue, 'new' => $newCategoryValue];
         }
 
-        if ($task->color !== $color) {
-            $changes['color'] = ['old' => $task->color, 'new' => $color];
+        if ($task->color !== $newColor) {
+            $changes['color'] = ['old' => $task->color, 'new' => $newColor];
         }
 
-        return DB::transaction(function () use ($user, $task, $board, $title, $description, $priority, $newDueAt, $category, $color, $changes): Task {
+        return DB::transaction(function () use ($user, $task, $board, $title, $description, $priority, $newDueAt, $category, $newColor, $changes): Task {
             $task->update([
                 'title' => trim($title),
-                'color' => $color ?? '#2563eb',
+                'color' => $newColor,
                 'description' => $description,
                 'priority' => $priority,
                 'due_at' => $newDueAt,

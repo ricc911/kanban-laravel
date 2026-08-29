@@ -75,7 +75,8 @@ class Workspace extends Model
 
     public function canManageMembers(User $user): bool
     {
-        return in_array($this->roleFor($user), ['owner', 'admin'], true);
+        return $this->type === 'shared'
+            && in_array($this->roleFor($user), ['owner', 'admin'], true);
     }
 
     public function canManageMember(User $actor, User $target): bool

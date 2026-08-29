@@ -14,14 +14,15 @@ use App\Models\Task;
 use App\Models\User;
 use App\Models\Workspace;
 use Database\Seeders\PlanSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
 class BoardRealtimeTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
 
     protected function setUp(): void
     {
@@ -111,11 +112,14 @@ class BoardRealtimeTest extends TestCase
     public function test_create_task_dispatches_a_compact_created_event_on_its_board(): void
     {
         [$user, , $board, $column] = $this->sharedBoard();
-        Event::fake([
-            TaskCreated::class,
-            ActivityLogged::class,
-        ]);
+        $createdEvent = null;
+        Event::listen(TaskCreated::class, function (TaskCreated $event) use (&$createdEvent): void {
+            $createdEvent = $event;
+        });
+        Event::fake([ActivityLogged::class]);
+        config(['broadcasting.default' => 'null']);
 
+        DB::beginTransaction();
         $this->actingAs($user)
             ->postJson("/api/boards/{$board->id}/columns/{$column->id}/tasks", [
                 'title' => 'Nuova task',
@@ -123,23 +127,24 @@ class BoardRealtimeTest extends TestCase
                 'priority' => 'high',
             ])
             ->assertCreated();
+        DB::commit();
 
-        Event::assertDispatched(TaskCreated::class, function (TaskCreated $event) use ($board): bool {
-            return $event->broadcastOn()[0]->name === "private-board.{$board->id}"
-                && array_keys($event->broadcastWith()) === ['task']
-                && array_keys($event->broadcastWith()['task']) === [
-                    'id',
-                    'board_id',
-                    'board_column_id',
-                    'category_id',
-                    'title',
-                    'description',
-                    'position',
-                    'priority',
-                    'due_at',
-                    'archived',
-                ];
-        });
+        $this->assertInstanceOf(TaskCreated::class, $createdEvent);
+        $this->assertSame("private-board.{$board->id}", $createdEvent->broadcastOn()[0]->name);
+        $this->assertSame(['task'], array_keys($createdEvent->broadcastWith()));
+        $this->assertSame([
+            'id',
+            'board_id',
+            'board_column_id',
+            'category_id',
+            'title',
+            'color',
+            'description',
+            'position',
+            'priority',
+            'due_at',
+            'archived',
+        ], array_keys($createdEvent->broadcastWith()['task']));
     }
 
     public function test_effective_task_update_dispatches_but_an_unchanged_update_does_not(): void
@@ -151,6 +156,7 @@ class BoardRealtimeTest extends TestCase
             ActivityLogged::class,
         ]);
 
+        DB::beginTransaction();
         $this->actingAs($user)
             ->patchJson("/api/tasks/{$task->id}", [
                 'title' => 'Dopo',
@@ -160,10 +166,16 @@ class BoardRealtimeTest extends TestCase
                 'category_id' => null,
             ])
             ->assertOk();
+        DB::commit();
 
         Event::assertDispatched(TaskUpdated::class);
+        Event::assertDispatched(ActivityLogged::class);
 
-        Event::fake([TaskUpdated::class]);
+        Event::fake([
+            TaskUpdated::class,
+            ActivityLogged::class,
+        ]);
+        DB::beginTransaction();
         $this->actingAs($user)
             ->patchJson("/api/tasks/{$task->id}", [
                 'title' => 'Dopo',
@@ -173,8 +185,10 @@ class BoardRealtimeTest extends TestCase
                 'category_id' => null,
             ])
             ->assertOk();
+        DB::commit();
 
         Event::assertNotDispatched(TaskUpdated::class);
+        Event::assertNotDispatched(ActivityLogged::class);
     }
 
     public function test_move_task_dispatches_the_event_for_the_correct_board(): void

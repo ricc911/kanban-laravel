@@ -397,7 +397,7 @@
     .project-side-actions {
       display: flex;
       align-items: center;
-      justify-content: flex-end;
+      justify-content: flex-start;
       gap: 8px;
       margin-left: auto;
     }
@@ -837,6 +837,81 @@
       padding: 15px 16px;
     }
 
+    .workspace-member-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      min-height: 42px;
+      padding: 7px 0;
+      color: #dbe5f2;
+      font-size: 14px;
+    }
+
+    .workspace-member-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .workspace-member-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex: 0 0 226px;
+    }
+
+    .workspace-member-row select {
+      order: 1;
+      width: 130px;
+      height: 32px;
+      border: 1px solid #385171;
+      border-radius: 8px;
+      background: #101a29;
+      color: #e8f0fb;
+      padding: 6px 28px 6px 10px;
+      outline: none;
+    }
+
+    .workspace-member-row select:focus {
+      border-color: #78a9e8;
+      box-shadow: 0 0 0 3px rgba(120, 169, 232, .14);
+    }
+
+    .workspace-member-row .btn-danger {
+      order: 2;
+      width: 80px;
+      height: 32px;
+      padding: 7px 10px;
+      border-color: rgba(214, 162, 87, .58);
+      background: rgba(112, 76, 25, .28);
+      color: #f3c875;
+      white-space: nowrap;
+    }
+
+    .workspace-member-row .btn-danger:hover {
+      border-color: #e7b45e;
+      background: rgba(145, 96, 26, .46);
+      color: #ffe3a4;
+    }
+
+    @media (max-width: 560px) {
+      .workspace-member-row {
+        flex-wrap: wrap;
+      }
+
+      .workspace-member-name {
+        flex-basis: 100%;
+      }
+
+      .workspace-member-controls {
+        width: 100%;
+        flex-basis: 100%;
+      }
+    }
+
     .workspace-panel-heading {
       display: flex;
       align-items: baseline;
@@ -902,9 +977,44 @@
     }
 
     .workspace-invitation {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
       color: #d9dfe1;
       line-height: 1.5;
       overflow-wrap: anywhere;
+    }
+
+    .workspace-invitation-remove {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      width: 34px;
+      height: 34px;
+      border: 1px solid rgba(216, 96, 96, .42);
+      border-radius: 8px;
+      background: rgba(92, 34, 45, .25);
+      color: #f08a8a;
+      cursor: pointer;
+      transition: .18s ease;
+    }
+
+    .workspace-invitation-remove:hover {
+      border-color: #e27c7c;
+      background: rgba(126, 43, 54, .42);
+      color: #ffd2d2;
+    }
+
+    .workspace-invitation-remove:disabled {
+      cursor: wait;
+      opacity: .55;
+    }
+
+    .workspace-invitation-remove .icon {
+      width: 15px;
+      height: 15px;
     }
 
     .notification-button {

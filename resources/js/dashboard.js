@@ -1309,21 +1309,28 @@ async function loadWorkspaceManagement() {
     elements.workspaceMembers.replaceChildren();
     (members.data ?? []).forEach((member) => {
         const row = document.createElement('div');
+        row.className = 'workspace-member-row';
         const role = member.pivot?.role ?? 'member';
         const roleLabels = { owner: 'Proprietario', admin: 'Amministratore', member: 'Membro', viewer: 'Visualizzatore' };
-        row.textContent = `${member.name} — ${roleLabels[role] ?? 'Membro'}`;
+        const name = document.createElement('span');
+        name.className = 'workspace-member-name';
+        name.textContent = member.name;
+        row.append(name);
+        const controls = document.createElement('div');
+        controls.className = 'workspace-member-controls';
         if (Number(member.id) !== Number(workspace.owner_id) && ['owner', 'admin'].includes(workspace.current_user_role)) {
             const remove = document.createElement('button');
             remove.className = 'btn btn-danger'; remove.textContent = 'Rimuovi';
             remove.onclick = async () => { await request(`/api/workspaces/${workspace.id}/members/${member.id}`, { method: 'DELETE' }); await loadWorkspaceManagement(); };
-            row.append(' ', remove);
+            controls.append(remove);
             if (workspace.current_user_role === 'owner' || ['member', 'viewer'].includes(role)) {
                 const select = document.createElement('select');
                 [['admin', 'Amministratore'], ['member', 'Membro'], ['viewer', 'Visualizzatore']].forEach(([value, label]) => { const option = document.createElement('option'); option.value = value; option.textContent = label; option.selected = role === value; select.append(option); });
                 select.onchange = async () => { await request(`/api/workspaces/${workspace.id}/members/${member.id}/role`, { method: 'PATCH', body: JSON.stringify({ role: select.value }) }); await loadWorkspaceManagement(); };
-                row.append(' ', select);
+                controls.append(select);
             }
         }
+        if (controls.childElementCount) row.append(controls);
         elements.workspaceMembers.append(row);
     });
     elements.pendingInvitations.replaceChildren();
@@ -1335,6 +1342,23 @@ async function loadWorkspaceManagement() {
             const invitation = document.createElement('div');
             invitation.className = 'workspace-invitation';
             invitation.textContent = `${item.email} — ${formatInvitationExpiry(item.expires_at)}`;
+            const remove = document.createElement('button');
+            remove.className = 'workspace-invitation-remove';
+            remove.type = 'button';
+            remove.title = 'Cancella invito';
+            remove.setAttribute('aria-label', `Cancella invito per ${item.email}`);
+            remove.append(icon('trash-2'));
+            remove.onclick = async () => {
+                remove.disabled = true;
+                try {
+                    await request(`/api/invitations/${item.id}`, { method: 'DELETE' });
+                    await loadWorkspaceManagement();
+                } catch (error) {
+                    remove.disabled = false;
+                    showMessage(elements.dashboardMessage, error.message);
+                }
+            };
+            invitation.append(remove);
             elements.pendingInvitations.append(invitation);
         });
     }

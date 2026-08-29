@@ -48,7 +48,7 @@ class CreateTask
             ]);
         }
 
-        return DB::transaction(function () use ($user, $board, $column, $category, $title, $description, $priority, $dueAt, $color): Task {
+        $task = DB::transaction(function () use ($user, $board, $column, $category, $title, $description, $priority, $dueAt, $color): Task {
             $position = (($column->tasks()->max('position') ?? 0) + 1000);
 
             $task = Task::create([
@@ -63,9 +63,12 @@ class CreateTask
                 'position' => $position,
             ]);
             $this->logger->execute($user, $board->workspace, 'task.created', $board, $task, ['task_title' => $task->title]);
-            TaskCreated::dispatch($task);
 
             return $task;
         });
+
+        TaskCreated::dispatch($task);
+
+        return $task;
     }
 }
