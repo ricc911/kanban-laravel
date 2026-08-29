@@ -3,9 +3,11 @@
 namespace App\Actions\Folders;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\WorkspaceChanged;
 use App\Models\Board;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\RealtimePayload;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -69,6 +71,9 @@ class MoveFolder
                     'from_parent_name' => $fromParent?->name,
                     'to_parent_id' => $parent?->id,
                     'to_parent_name' => $parent?->name,
+                ]);
+                WorkspaceChanged::dispatch('folder.moved', (int) $folder->workspace_id, [
+                    'folder' => RealtimePayload::folder($folder->fresh()),
                 ]);
             }
         });

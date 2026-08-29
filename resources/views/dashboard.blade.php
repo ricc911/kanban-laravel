@@ -88,6 +88,10 @@
             </div>
             <div class="topbar-actions">
                 <select class="workspace-select" data-workspace-select aria-label="Workspace"></select>
+                <button class="btn btn-primary with-icon" type="button" data-new-workspace>
+                    <i class="icon" data-lucide="plus"></i>
+                    Nuovo workspace
+                </button>
                 <button class="btn btn-primary with-icon" type="button" data-new-project>
                     <i class="icon" data-lucide="plus"></i>
                     Nuovo progetto
@@ -105,8 +109,8 @@
         </header>
 
         <aside class="notifications-panel" data-notifications-panel hidden>
-            <div class="notifications-head"><h2>Notifiche</h2><button class="close" type="button" data-close-notifications>&times;</button></div>
-            <div class="notifications-list" data-notifications-list></div>
+            <div class="notifications-head"><div><span class="notifications-eyebrow">Aggiornamenti</span><h2>Notifiche</h2></div><button class="close" type="button" data-close-notifications>&times;</button></div>
+            <div class="notifications-body"><div class="notifications-panel-heading"><h3>Inviti workspace</h3><span>Richiedono la tua risposta</span></div><div class="notifications-list" data-notifications-list></div></div>
         </aside>
 
         <div class="modal-backdrop" data-account-modal hidden>
@@ -133,7 +137,7 @@
             <div class="page-head">
                 <h1>I tuoi progetti</h1>
                 <p class="page-note">Apri un progetto per entrare nel suo Kanban.</p>
-                <p class="page-note" data-dashboard-message hidden></p>
+                <div class="page-note toast-message" data-dashboard-message hidden><span data-dashboard-message-text></span><button class="toast-close" type="button" data-close-dashboard-message aria-label="Chiudi messaggio">&times;</button></div>
             </div>
 
             <div class="workspace">
@@ -154,8 +158,6 @@
                     <div class="workspace-actions">
                         <button class="btn with-icon" type="button" data-manage-workspace hidden>Gestisci workspace</button>
                         <button class="btn with-icon" type="button" data-open-activity hidden>Cronologia</button>
-                        <button class="btn with-icon" type="button" data-new-workspace>Nuovo workspace</button>
-                        <button class="btn with-icon" type="button" data-accept-invitation>Accetta invito</button>
                         <button class="btn with-icon" type="button" data-new-folder>
                             <i class="icon" data-lucide="folder-plus"></i>
                             Nuova cartella
@@ -184,22 +186,29 @@
                     <button class="close" type="button" data-close-modal>&times;</button>
                 </div>
                 <div class="modal-body">
-                    <p><strong data-workspace-detail-name></strong><br><span data-workspace-detail-owner></span></p>
-                    <form class="workspace-invite-form" data-invite-form>
+                    <section class="workspace-info-card">
+                        <span class="workspace-panel-eyebrow">Workspace condiviso</span>
+                        <strong data-workspace-detail-name></strong>
+                        <span data-workspace-detail-owner></span>
+                    </section>
+                    <section class="workspace-panel workspace-invite-panel">
+                        <div class="workspace-panel-heading"><h3>Invita membro</h3><span>Collabora con il tuo team</span></div>
+                        <form class="workspace-invite-form" data-invite-form>
                         <div class="field"><label for="inviteEmail">Invita membro</label><input id="inviteEmail" type="email" required placeholder="email@esempio.it" data-invite-email></div>
                         <button class="btn btn-primary" type="submit">Invia invito</button>
-                    </form>
-                    <div class="field workspace-section"><label>Inviti pendenti</label><div data-pending-invitations></div></div>
-                    <div class="field workspace-section"><label>Membri</label><div data-workspace-members></div></div>
-                    <div class="modal-actions"><button class="btn btn-danger" type="button" data-leave-workspace>Lascia workspace</button></div>
+                        </form>
+                    </section>
+                    <section class="workspace-panel workspace-section"><div class="workspace-panel-heading"><h3>Inviti pendenti</h3><span>In attesa di risposta</span></div><div data-pending-invitations></div></section>
+                    <section class="workspace-panel workspace-section"><div class="workspace-panel-heading"><h3>Membri</h3><span>Persone con accesso</span></div><div data-workspace-members></div></section>
+                    <div class="workspace-danger-zone"><div><strong>Azioni workspace</strong><span>Le modifiche possono influire su tutti i membri</span></div><div class="modal-actions"><button class="btn warning-solid" type="button" data-leave-workspace>Lascia workspace</button><button class="btn danger-solid" type="button" data-delete-workspace hidden>Elimina workspace</button></div></div>
                 </div>
             </div>
         </div>
 
         <div class="modal-backdrop" data-activity-modal hidden>
             <div class="modal activity-modal">
-                <div class="modal-head"><h2>Cronologia</h2><button class="close" type="button" data-close-modal>&times;</button></div>
-                <div class="modal-body"><div data-activity-list></div><button class="btn" type="button" data-activity-more hidden>Carica altre</button></div>
+                <div class="modal-head"><div><span class="activity-modal-eyebrow">Workspace</span><h2>Cronologia</h2></div><button class="close" type="button" data-close-modal>&times;</button></div>
+                <div class="modal-body activity-modal-body"><div class="activity-panel"><div class="activity-panel-heading"><h3>Attività recenti</h3><span>Modifiche del workspace</span></div><div data-activity-list></div><button class="btn" type="button" data-activity-more hidden>Carica altre</button></div></div>
             </div>
         </div>
 

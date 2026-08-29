@@ -3,9 +3,11 @@
 namespace App\Actions\Boards;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\BoardChanged;
 use App\Models\Board;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\RealtimePayload;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -29,8 +31,9 @@ class MoveBoard
 
         $board->loadMissing('folder');
         $fromFolder = $board->folder;
+        $fromArchived = (bool) $board->archived;
 
-        DB::transaction(function () use ($user, $board, $folder, $archived, $fromFolder): void {
+        DB::transaction(function () use ($user, $board, $folder, $archived, $fromFolder, $fromArchived): void {
             $updates = ['folder_id' => $folder?->id];
 
             if ($archived !== null) {
@@ -47,6 +50,18 @@ class MoveBoard
                     'to_folder_id' => $folder?->id,
                     'to_folder_name' => $folder?->name,
                 ]);
+                BoardChanged::dispatch('board.moved', (int) $board->workspace_id, (int) $board->id, [
+                    'board' => RealtimePayload::board($board->fresh()),
+                ], true);
+            }
+
+            if ($archived !== null && $fromArchived !== (bool) $archived) {
+                $freshBoard = $board->fresh();
+                $action = $archived ? 'board.archived' : 'board.restored';
+                $this->logger->execute($user, $board->workspace, $action, $freshBoard, $freshBoard, ['board_name' => $freshBoard->name]);
+                BoardChanged::dispatch($action, (int) $board->workspace_id, (int) $board->id, [
+                    'board' => RealtimePayload::board($freshBoard),
+                ], true);
             }
         });
 

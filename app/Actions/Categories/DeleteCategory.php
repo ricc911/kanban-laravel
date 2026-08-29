@@ -3,8 +3,11 @@
 namespace App\Actions\Categories;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\BoardChanged;
 use App\Models\Category;
 use App\Models\User;
+use App\Support\RealtimePayload;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class DeleteCategory
@@ -21,9 +24,15 @@ class DeleteCategory
             ]);
         }
 
-        $board = $category->board;
-        $name = $category->name;
-        $category->delete();
-        $this->logger->execute($user, $board->workspace, 'category.deleted', $board, null, ['category_name' => $name]);
+        DB::transaction(function () use ($user, $category): void {
+            $board = $category->board;
+            $payload = RealtimePayload::category($category);
+            $this->logger->execute($user, $board->workspace, 'category.deleted', $board, $category, ['category_name' => $category->name]);
+            $category->delete();
+            BoardChanged::dispatch('category.deleted', (int) $board->workspace_id, (int) $board->id, [
+                'category_id' => (int) $category->id,
+                'category' => $payload,
+            ]);
+        });
     }
 }

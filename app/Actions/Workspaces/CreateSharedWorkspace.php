@@ -3,8 +3,10 @@
 namespace App\Actions\Workspaces;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\UserRealtimeEvent;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Support\RealtimePayload;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -45,6 +47,9 @@ class CreateSharedWorkspace
                 'joined_at' => now(),
             ]);
             $this->logger->execute($user, $workspace, 'workspace.created', null, $workspace, ['workspace_name' => $workspace->name]);
+            UserRealtimeEvent::dispatch('workspace.created', (int) $user->id, [
+                'workspace' => RealtimePayload::workspace($workspace),
+            ]);
 
             return $workspace;
         });

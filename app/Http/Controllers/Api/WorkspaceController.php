@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Workspaces\CreateSharedWorkspace;
+use App\Actions\Workspaces\DeleteWorkspace;
 use App\Actions\Workspaces\LeaveWorkspace;
 use App\Actions\Workspaces\RemoveWorkspaceMember;
 use App\Http\Controllers\Controller;
@@ -17,6 +18,13 @@ use Illuminate\Support\Facades\Gate;
 
 class WorkspaceController extends Controller
 {
+    public function destroy(Request $request, Workspace $workspace, DeleteWorkspace $action): JsonResponse
+    {
+        $action->execute($request->user(), $workspace);
+
+        return response()->json(status: 204);
+    }
+
     public function store(StoreSharedWorkspaceRequest $request, CreateSharedWorkspace $action): JsonResponse
     {
         return response()->json(['data' => $action->execute($request->user(), $request->validated('name'))], 201);

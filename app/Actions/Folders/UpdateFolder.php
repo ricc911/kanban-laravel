@@ -3,8 +3,11 @@
 namespace App\Actions\Folders;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\WorkspaceChanged;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\RealtimePayload;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class UpdateFolder
@@ -25,14 +28,21 @@ class UpdateFolder
                 $changes[$field] = ['old' => $old, 'new' => $new];
             }
         }
-        $folder->update([
-            'name' => trim($name),
-            'color' => $color,
-        ]);
-        if ($changes) {
-            $this->logger->execute($user, $folder->workspace, 'folder.updated', null, $folder, ['folder_name' => $folder->name, 'changes' => $changes]);
-        }
 
-        return $folder->fresh();
+        return DB::transaction(function () use ($user, $folder, $name, $color, $changes): Folder {
+            $folder->update([
+                'name' => trim($name),
+                'color' => $color,
+            ]);
+            $freshFolder = $folder->fresh();
+            if ($changes) {
+                $this->logger->execute($user, $folder->workspace, 'folder.updated', null, $freshFolder, ['folder_name' => $freshFolder->name, 'changes' => $changes]);
+                WorkspaceChanged::dispatch('folder.updated', (int) $folder->workspace_id, [
+                    'folder' => RealtimePayload::folder($freshFolder),
+                ]);
+            }
+
+            return $freshFolder;
+        });
     }
 }

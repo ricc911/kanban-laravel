@@ -1,3 +1,6 @@
+import { subscribeToUserRealtime, subscribeToWorkspaceRealtime } from './realtime';
+import { activityDayKey, formatActivity, formatActivityDate, formatActivityDay, formatActivityDetails } from './activity-log';
+
 const DEFAULT_FOLDER_COLOR = '#4f6f9f';
 const DEFAULT_PROJECT_COLOR = '#2563eb';
 const STORAGE_WORKSPACE_KEY = 'kanban.dashboard.workspace';
@@ -14,6 +17,14 @@ const state = {
     draggedFolderId: null,
     initialRouteApplied: false,
     confirmResolve: null,
+    userRealtimeCleanup: null,
+    workspaceRealtimeCleanups: new Map(),
+    invitations: [],
+    activities: [],
+    activityHasMore: false,
+    activityPage: 1,
+    activityOpenDay: null,
+    dashboardMessageTimeout: null,
 };
 
 const elements = {
@@ -34,6 +45,8 @@ const elements = {
     accountMessage: document.querySelector('[data-account-message]'),
     authMessage: document.querySelector('[data-auth-message]'),
     dashboardMessage: document.querySelector('[data-dashboard-message]'),
+    dashboardMessageText: document.querySelector('[data-dashboard-message-text]'),
+    closeDashboardMessage: document.querySelector('[data-close-dashboard-message]'),
     workspaceSelect: document.querySelector('[data-workspace-select]'),
     newWorkspaceButton: document.querySelector('[data-new-workspace]'),
     newWorkspaceModal: document.querySelector('[data-new-workspace-modal]'),
@@ -56,6 +69,7 @@ const elements = {
     inviteForm: document.querySelector('[data-invite-form]'),
     inviteEmail: document.querySelector('[data-invite-email]'),
     leaveWorkspace: document.querySelector('[data-leave-workspace]'),
+    deleteWorkspace: document.querySelector('[data-delete-workspace]'),
     folderPath: document.querySelector('[data-folder-path]'),
     folderSection: document.querySelector('[data-folder-section]'),
     folders: document.querySelector('[data-folders]'),
@@ -150,10 +164,28 @@ function refreshIcons() {
 
 function showMessage(target, message = '', isError = true) {
     if (!target) return;
-    target.textContent = message;
+    if (target === elements.dashboardMessage && elements.dashboardMessageText) {
+        elements.dashboardMessageText.textContent = message;
+    } else {
+        target.textContent = message;
+    }
     target.hidden = !message;
     target.style.color = isError ? '#fca5a5' : '#86efac';
+    if (target === elements.dashboardMessage) {
+        window.clearTimeout(state.dashboardMessageTimeout);
+        if (message) {
+            state.dashboardMessageTimeout = window.setTimeout(() => showMessage(target, ''), 30000);
+        }
+    }
 }
+
+function closeDashboardMessage() {
+    window.clearTimeout(state.dashboardMessageTimeout);
+    state.dashboardMessageTimeout = null;
+    showMessage(elements.dashboardMessage, '');
+}
+
+elements.closeDashboardMessage?.addEventListener('click', closeDashboardMessage);
 
 function icon(name) {
     const node = document.createElement('i');
@@ -188,6 +220,231 @@ function normalizeBoard(board) {
         task_count: Number(board.tasks_count ?? board.task_count ?? 0),
     };
 }
+
+function normalizeWorkspace(workspace) {
+    return {
+        ...workspace,
+        id: Number(workspace.id),
+        owner_id: Number(workspace.owner_id),
+    };
+}
+
+function sameWorkspace(payload, workspaceId) {
+    return Number(payload?.workspace_id) === Number(workspaceId);
+}
+
+function upsertWorkspace(workspace) {
+    const normalized = normalizeWorkspace(workspace);
+    state.workspaces = [
+        ...state.workspaces.filter((item) => Number(item.id) !== normalized.id),
+        normalized,
+    ].sort((left, right) => left.name.localeCompare(right.name, 'it'));
+    renderWorkspaceOptions();
+}
+
+function upsertFolder(folder) {
+    const normalized = normalizeFolder(folder);
+    state.folders = [
+        ...state.folders.filter((item) => item.id !== normalized.id),
+        normalized,
+    ];
+}
+
+function upsertBoard(board) {
+    const normalized = normalizeBoard(board);
+    state.boards = [
+        ...state.boards.filter((item) => item.id !== normalized.id),
+        normalized,
+    ];
+}
+
+function applyRemoteFolder(payload, archiveTree = false) {
+    const folder = payload?.folder;
+    if (!folder || !sameWorkspace(folder, state.workspaceId)) return;
+
+    upsertFolder(folder);
+    if (archiveTree) {
+        const ids = folderTreeIds(folder.id);
+        state.folders = state.folders.map((item) => (
+            ids.includes(item.id) ? { ...item, archived: folder.archived } : item
+        ));
+        state.boards = state.boards.map((board) => (
+            ids.includes(board.folder_id) ? { ...board, archived: folder.archived } : board
+        ));
+    }
+    renderDashboard();
+}
+
+function applyRemoteFolderDeleted(payload) {
+    if (!sameWorkspace(payload, state.workspaceId)) return;
+
+    const folderId = Number(payload.folder_id ?? payload.folder?.id);
+    const ids = folderTreeIds(folderId);
+    state.folders = state.folders.filter((folder) => !ids.includes(folder.id));
+    state.boards = state.boards.filter((board) => !ids.includes(board.folder_id));
+    if (ids.includes(state.currentFolderId)) {
+        state.currentFolderId = null;
+        state.viewingArchived = false;
+    }
+    renderDashboard();
+}
+
+function applyRemoteBoard(payload, removed = false) {
+    const board = payload?.board;
+    if (removed) {
+        if (!sameWorkspace(payload, state.workspaceId)) return;
+        state.boards = state.boards.filter((item) => item.id !== Number(payload.board_id));
+    } else {
+        if (!board || !sameWorkspace(board, state.workspaceId)) return;
+        upsertBoard(board);
+    }
+    renderDashboard();
+}
+
+function applyRemoteWorkspaceActivity(payload) {
+    if (!sameWorkspace(payload, state.workspaceId) || !payload.activity) return;
+
+    const activity = payload.activity;
+    state.activities = [
+        activity,
+        ...state.activities.filter((item) => Number(item.id) !== Number(activity.id)),
+    ];
+    if (!elements.activityModal.hidden) renderActivityList();
+}
+
+function handleRemoteWorkspaceMembership(payload) {
+    if (!sameWorkspace(payload, state.workspaceId)) return;
+    if (!elements.workspaceModal.hidden) {
+        loadWorkspaceManagement().catch((error) => showMessage(elements.dashboardMessage, error.message));
+    }
+}
+
+function handleRemoteWorkspaceCreated(payload) {
+    if (payload?.workspace) {
+        upsertWorkspace(payload.workspace);
+        syncRealtimeSubscriptions();
+    }
+}
+
+function handleRemoteWorkspaceAvailable(payload) {
+    handleRemoteWorkspaceCreated(payload);
+    const workspace = payload?.workspace;
+    if (workspace && !state.workspaceId) {
+        state.workspaceId = Number(workspace.id);
+        loadWorkspaceData().catch((error) => showMessage(elements.dashboardMessage, error.message));
+    }
+}
+
+function handleRemoteWorkspaceAccessRemoved(payload) {
+    const workspaceId = Number(payload?.workspace?.id ?? payload?.workspace_id);
+    if (!workspaceId) return;
+
+    const wasCurrent = Number(state.workspaceId) === workspaceId;
+    state.workspaces = state.workspaces.filter((workspace) => Number(workspace.id) !== workspaceId);
+    state.workspaceRealtimeCleanups.get(workspaceId)?.();
+    state.workspaceRealtimeCleanups.delete(workspaceId);
+
+    if (wasCurrent) {
+        state.workspaceId = state.workspaces[0]?.id ?? null;
+        state.currentFolderId = null;
+        state.viewingArchived = false;
+    }
+    renderDashboard();
+    if (wasCurrent) loadWorkspaceData().catch((error) => showMessage(elements.dashboardMessage, error.message));
+}
+
+async function handleRemoteWorkspaceDeleted(payload) {
+    handleRemoteWorkspaceAccessRemoved(payload);
+    await confirmDialog('Il workspace è stato eliminato dal proprietario. Non è più disponibile.');
+}
+
+function handleRemoteInvitationCreated(payload) {
+    const invitation = payload?.invitation;
+    if (!invitation) return;
+
+    const workspace = {
+        id: invitation.workspace_id,
+        name: invitation.workspace_name,
+        owner: { name: invitation.owner_name },
+    };
+    state.invitations = [
+        normalizeInvitation({ ...invitation, workspace }),
+        ...state.invitations.filter((item) => Number(item.id) !== Number(invitation.id)),
+    ];
+    renderNotifications();
+}
+
+function removeInvitation(invitationId) {
+    state.invitations = state.invitations.filter((item) => Number(item.id) !== Number(invitationId));
+    renderNotifications();
+}
+
+function handleRemoteInvitationOwnerChange(payload) {
+    if (state.workspaceId !== Number(payload?.workspace_id)) return;
+    if (!elements.workspaceModal.hidden) {
+        loadWorkspaceManagement().catch((error) => showMessage(elements.dashboardMessage, error.message));
+    }
+}
+
+function syncRealtimeSubscriptions() {
+    if (!state.user) return;
+
+    if (!state.userRealtimeCleanup) {
+        state.userRealtimeCleanup = subscribeToUserRealtime(state.user.id, {
+            invitationCreated: handleRemoteInvitationCreated,
+            invitationAccepted: (payload) => removeInvitation(payload?.invitation_id),
+            invitationRejected: (payload) => removeInvitation(payload?.invitation_id),
+            workspaceCreated: handleRemoteWorkspaceCreated,
+            workspaceAvailable: handleRemoteWorkspaceAvailable,
+            workspaceAccessRemoved: handleRemoteWorkspaceAccessRemoved,
+            workspaceDeleted: handleRemoteWorkspaceDeleted,
+            pendingInvitationCreated: handleRemoteInvitationOwnerChange,
+            error: (error) => console.warn('Realtime utente non disponibile.', error),
+        });
+    }
+
+    const workspaceIds = new Set(state.workspaces.map((workspace) => Number(workspace.id)));
+    state.workspaceRealtimeCleanups.forEach((cleanup, workspaceId) => {
+        if (!workspaceIds.has(Number(workspaceId))) {
+            cleanup();
+            state.workspaceRealtimeCleanups.delete(workspaceId);
+        }
+    });
+
+    state.workspaces.forEach((workspace) => {
+        const workspaceId = Number(workspace.id);
+        if (state.workspaceRealtimeCleanups.has(workspaceId)) return;
+
+        state.workspaceRealtimeCleanups.set(workspaceId, subscribeToWorkspaceRealtime(workspaceId, {
+            folderCreated: (payload) => applyRemoteFolder(payload),
+            folderUpdated: (payload) => applyRemoteFolder(payload),
+            folderMoved: (payload) => applyRemoteFolder(payload, true),
+            folderArchived: (payload) => applyRemoteFolder(payload, true),
+            folderRestored: (payload) => applyRemoteFolder(payload, true),
+            folderDeleted: applyRemoteFolderDeleted,
+            boardCreated: (payload) => applyRemoteBoard(payload),
+            boardUpdated: (payload) => applyRemoteBoard(payload),
+            boardMoved: (payload) => applyRemoteBoard(payload),
+            boardArchived: (payload) => applyRemoteBoard(payload),
+            boardRestored: (payload) => applyRemoteBoard(payload),
+            boardDeleted: (payload) => applyRemoteBoard(payload, true),
+            memberJoined: handleRemoteWorkspaceMembership,
+            memberRemoved: handleRemoteWorkspaceMembership,
+            memberLeft: handleRemoteWorkspaceMembership,
+            activityLogged: applyRemoteWorkspaceActivity,
+            error: (error) => console.warn('Realtime workspace non disponibile.', error),
+        }));
+    });
+}
+
+function clearRealtimeSubscriptions() {
+    state.userRealtimeCleanup?.();
+    state.userRealtimeCleanup = null;
+    state.workspaceRealtimeCleanups.forEach((cleanup) => cleanup());
+    state.workspaceRealtimeCleanups.clear();
+}
+
+window.addEventListener('pagehide', clearRealtimeSubscriptions);
 
 function activeWorkspace() {
     return state.workspaces.find((workspace) => Number(workspace.id) === Number(state.workspaceId)) ?? null;
@@ -247,7 +504,13 @@ function boardCountForFolder(folderId) {
 
 function visibleBoards() {
     if (state.viewingArchived && state.currentFolderId === null) {
-        return state.boards.filter((board) => board.archived);
+        return state.boards.filter((board) => {
+            if (!board.archived) return false;
+            if (board.folder_id === null) return true;
+
+            const folder = state.folders.find((item) => item.id === board.folder_id);
+            return !folder || !folder.archived;
+        });
     }
 
     return state.boards.filter(
@@ -277,6 +540,17 @@ function formatInvitationExpiry(value) {
     return `scade il ${new Intl.DateTimeFormat('it-IT', {
         day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
     }).format(date)}`;
+}
+
+function normalizeInvitation(invitation) {
+    return {
+        ...invitation,
+        id: Number(invitation.id),
+        workspace: invitation.workspace ? {
+            ...invitation.workspace,
+            id: Number(invitation.workspace.id),
+        } : null,
+    };
 }
 
 function boardUrl(board) {
@@ -567,7 +841,7 @@ async function loadAuthenticatedUser() {
     state.user = userResponse.data ?? userResponse;
 
     const workspaceResponse = await request('/api/workspaces');
-    state.workspaces = workspaceResponse.data ?? [];
+    state.workspaces = (workspaceResponse.data ?? []).map(normalizeWorkspace);
 
     const storedWorkspace = Number(localStorage.getItem(STORAGE_WORKSPACE_KEY));
     const fallbackWorkspace = state.workspaces[0]?.id ?? null;
@@ -577,27 +851,32 @@ async function loadAuthenticatedUser() {
 
     elements.auth.hidden = true;
     elements.dashboard.hidden = false;
+    syncRealtimeSubscriptions();
     await loadWorkspaceData();
     await loadInvitations();
 }
 
 async function loadWorkspaces() {
     const response = await request('/api/workspaces');
-    state.workspaces = response.data ?? [];
+    state.workspaces = (response.data ?? []).map(normalizeWorkspace);
 
     if (!state.workspaces.some((workspace) => Number(workspace.id) === Number(state.workspaceId))) {
         state.workspaceId = state.workspaces[0]?.id ?? null;
     }
 
+    syncRealtimeSubscriptions();
     await loadWorkspaceData();
 }
 
 function setGuestView() {
+    clearRealtimeSubscriptions();
     state.user = null;
     state.workspaces = [];
     state.workspaceId = null;
     state.folders = [];
     state.boards = [];
+    state.invitations = [];
+    state.activities = [];
     state.currentFolderId = null;
     state.viewingArchived = false;
     elements.dashboard.hidden = true;
@@ -999,6 +1278,7 @@ async function loadWorkspaceManagement() {
     if (!workspace) return;
     elements.workspaceDetailName.textContent = workspace.name;
     elements.workspaceDetailOwner.textContent = `Owner: ${workspace.owner?.name ?? workspace.owner?.email ?? '—'}`;
+    elements.deleteWorkspace.hidden = workspace.type !== 'shared' || Number(workspace.owner_id) !== Number(state.user?.id);
     const [members, invitations] = await Promise.all([
         request(`/api/workspaces/${workspace.id}/members`),
         request(`/api/workspaces/${workspace.id}/invitations`),
@@ -1034,40 +1314,99 @@ elements.manageWorkspaceButton.addEventListener('click', async () => {
     try { await loadWorkspaceManagement(); } catch (error) { showMessage(elements.dashboardMessage, error.message); }
 });
 
+function renderActivityList() {
+    elements.activityList.replaceChildren();
+    elements.activityMore.hidden = true;
+
+    if (!state.activities.length) {
+        elements.activityList.textContent = 'Nessuna attività.';
+        return;
+    }
+
+    const groups = new Map();
+    state.activities.forEach((activity) => {
+        const key = activityDayKey(activity.created_at);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(activity);
+    });
+    const openDay = state.activityOpenDay === undefined ? activityDayKey(new Date()) : state.activityOpenDay;
+    groups.forEach((activities, day) => {
+        const section = document.createElement('section');
+        section.className = 'activity-day';
+        const heading = document.createElement('button');
+        heading.className = 'activity-day-heading'; heading.type = 'button';
+        heading.append(icon(day === openDay ? 'chevron-down' : 'chevron-right'), document.createTextNode(formatActivityDay(day)));
+        const content = document.createElement('div'); content.className = 'activity-day-content'; content.hidden = day !== openDay;
+        heading.onclick = () => { state.activityOpenDay = openDay === day ? null : day; renderActivityList(); };
+        section.append(heading, content); elements.activityList.append(section);
+        activities.forEach((activity) => {
+        const row = document.createElement('div');
+        row.className = 'activity-row';
+        const actor = document.createElement('strong');
+        actor.textContent = activity.actor?.name ?? 'Utente';
+        const text = document.createElement('span');
+        text.textContent = formatActivity(activity);
+        const date = document.createElement('small');
+        date.textContent = formatActivityDate(activity.created_at);
+        const meta = document.createElement('div');
+        meta.className = 'activity-meta';
+        meta.append(date);
+        row.append(actor, text, meta);
+
+        const details = formatActivityDetails(activity);
+        if (details.length) {
+            const toggle = document.createElement('button');
+            toggle.className = 'activity-details-toggle';
+            toggle.type = 'button';
+            toggle.append(icon('chevron-down'), document.createTextNode('Dettagli'));
+            toggle.setAttribute('aria-expanded', 'false');
+            const box = document.createElement('div');
+            box.className = 'activity-details';
+            box.hidden = true;
+            details.forEach((detail) => {
+                const line = document.createElement('div');
+                line.textContent = `${detail.label}: ${detail.oldValue} → ${detail.newValue}`;
+                box.append(line);
+            });
+            toggle.onclick = () => {
+                box.hidden = !box.hidden;
+                toggle.replaceChildren(
+                    icon(box.hidden ? 'chevron-down' : 'chevron-up'),
+                    document.createTextNode(box.hidden ? 'Dettagli' : 'Nascondi'),
+                );
+                toggle.setAttribute('aria-expanded', String(!box.hidden));
+                refreshIcons();
+            };
+            meta.append(toggle);
+            row.append(box);
+        }
+        content.append(row);
+        });
+    });
+    elements.activityMore.hidden = !state.activityHasMore || state.activityOpenDay === null;
+    refreshIcons();
+}
+
 let activityPage = 1;
 async function loadActivity(append = false) {
     const response = await request(`/api/workspaces/${state.workspaceId}/activity?page=${activityPage}`);
     const rows = response.data ?? [];
-    if (!append) elements.activityList.replaceChildren();
+    if (!append) state.activities = [];
     rows.forEach((activity) => {
-        const row = document.createElement('div');
-        row.className = 'activity-row';
-        const actor = document.createElement('strong'); actor.textContent = activity.actor?.name ?? 'Utente';
-        const text = document.createElement('span'); text.textContent = formatActivity(activity);
-        const date = document.createElement('small'); date.textContent = formatActivityDate(activity.created_at);
-        const meta = document.createElement('div'); meta.className = 'activity-meta'; meta.append(date);
-        row.append(actor, text, meta);
-        const details = formatActivityDetails(activity);
-        if (details.length) {
-            const toggle = document.createElement('button'); toggle.className = 'activity-details-toggle'; toggle.type = 'button'; toggle.append(icon('chevron-down'), document.createTextNode('Dettagli')); toggle.setAttribute('aria-expanded', 'false');
-            const box = document.createElement('div'); box.className = 'activity-details'; box.hidden = true;
-            details.forEach((detail) => { const line = document.createElement('div'); line.textContent = `${detail.label}: ${detail.oldValue} → ${detail.newValue}`; box.append(line); });
-            toggle.onclick = () => { box.hidden = !box.hidden; toggle.replaceChildren(icon(box.hidden ? 'chevron-down' : 'chevron-up'), document.createTextNode(box.hidden ? 'Dettagli' : 'Nascondi')); toggle.setAttribute('aria-expanded', String(!box.hidden)); refreshIcons(); };
-            meta.append(toggle); row.append(box);
+        if (!state.activities.some((item) => Number(item.id) === Number(activity.id))) {
+            state.activities.push(activity);
         }
-        elements.activityList.append(row);
     });
-    if (!rows.length && !append) elements.activityList.textContent = 'Nessuna attività.';
-    elements.activityMore.hidden = !response.next_page_url;
-    refreshIcons();
+    renderActivityList();
+    state.activityHasMore = Boolean(response.next_page_url);
+    elements.activityMore.hidden = !state.activityHasMore || state.activityOpenDay === null;
 }
-elements.openActivityButton.addEventListener('click', async () => { elements.activityModal.hidden = false; elements.activityModal.classList.add('open'); activityPage = 1; await loadActivity(); });
+elements.openActivityButton.addEventListener('click', async () => { elements.activityModal.hidden = false; elements.activityModal.classList.add('open'); activityPage = 1; state.activityOpenDay = activityDayKey(new Date()); await loadActivity(); });
 elements.activityMore.addEventListener('click', async () => { activityPage += 1; await loadActivity(true); });
 elements.inviteForm.addEventListener('submit', async (event) => { event.preventDefault(); try { await request(`/api/workspaces/${state.workspaceId}/invitations`, { method: 'POST', body: JSON.stringify({ email: elements.inviteEmail.value }) }); elements.inviteForm.reset(); await loadWorkspaceManagement(); } catch (error) { showMessage(elements.dashboardMessage, error.message); } });
 
-async function loadInvitations() {
-    const response = await request('/api/invitations');
-    const invitations = response.data ?? [];
+function renderNotifications() {
+    const invitations = state.invitations;
     elements.notificationCount.textContent = String(invitations.length);
     elements.notificationCount.hidden = invitations.length === 0;
     elements.notificationsList.replaceChildren();
@@ -1102,6 +1441,12 @@ async function loadInvitations() {
     });
 }
 
+async function loadInvitations() {
+    const response = await request('/api/invitations');
+    state.invitations = (response.data ?? []).map(normalizeInvitation);
+    renderNotifications();
+}
+
 elements.notificationsButton.addEventListener('click', async () => {
     elements.notificationsPanel.hidden = !elements.notificationsPanel.hidden;
     if (!elements.notificationsPanel.hidden) await loadInvitations();
@@ -1122,6 +1467,24 @@ elements.notificationsList.addEventListener('click', async (event) => {
 });
 
 elements.leaveWorkspace.addEventListener('click', async () => { if (!window.confirm('Vuoi lasciare questo workspace?')) return; try { await request(`/api/workspaces/${state.workspaceId}/leave`, { method: 'DELETE' }); closeModals(); await loadWorkspaces(); } catch (error) { showMessage(elements.dashboardMessage, error.message); } });
+
+elements.deleteWorkspace.addEventListener('click', async () => {
+    const workspace = activeWorkspace();
+    if (!workspace) return;
+
+    const result = await confirmDialog(
+        `Eliminare definitivamente "${workspace.name}"? Verranno eliminati anche cartelle, progetti e dati contenuti.`
+    );
+    if (result !== 'delete') return;
+
+    try {
+        await request(`/api/workspaces/${workspace.id}`, { method: 'DELETE' });
+        closeModals();
+        await loadWorkspaces();
+    } catch (error) {
+        showMessage(elements.dashboardMessage, error.message);
+    }
+});
 
 elements.projectForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -1314,4 +1677,3 @@ attachQuickDropEvents();
 loadAuthenticatedUser()
     .catch(() => setGuestView())
     .finally(refreshIcons);
-import { formatActivity, formatActivityDate, formatActivityDetails } from './activity-log';

@@ -22,7 +22,8 @@ class UpdateTask
         ?string $description = null,
         ?string $priority = null,
         ?string $dueAt = null,
-        ?Category $category = null
+        ?Category $category = null,
+        ?string $color = null
     ): Task {
         if (! $task->board->workspace->hasMember($user)) {
             throw ValidationException::withMessages([
@@ -64,9 +65,14 @@ class UpdateTask
             $changes['category'] = ['old' => $oldCategoryValue, 'new' => $newCategoryValue];
         }
 
-        return DB::transaction(function () use ($user, $task, $board, $title, $description, $priority, $newDueAt, $category, $changes): Task {
+        if ($task->color !== $color) {
+            $changes['color'] = ['old' => $task->color, 'new' => $color];
+        }
+
+        return DB::transaction(function () use ($user, $task, $board, $title, $description, $priority, $newDueAt, $category, $color, $changes): Task {
             $task->update([
                 'title' => trim($title),
+                'color' => $color ?? '#2563eb',
                 'description' => $description,
                 'priority' => $priority,
                 'due_at' => $newDueAt,

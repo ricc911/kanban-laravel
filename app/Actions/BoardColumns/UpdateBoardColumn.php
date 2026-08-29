@@ -3,8 +3,11 @@
 namespace App\Actions\BoardColumns;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\BoardChanged;
 use App\Models\BoardColumn;
 use App\Models\User;
+use App\Support\RealtimePayload;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class UpdateBoardColumn
@@ -23,13 +26,20 @@ class UpdateBoardColumn
         }
 
         $changes = $column->name !== trim($name) ? ['name' => ['old' => $column->name, 'new' => trim($name)]] : [];
-        $column->update([
-            'name' => trim($name),
-        ]);
-        if ($changes) {
-            $this->logger->execute($user, $column->board->workspace, 'column.updated', $column->board, $column, ['column_name' => $column->name, 'changes' => $changes]);
-        }
 
-        return $column->fresh();
+        return DB::transaction(function () use ($user, $column, $name, $changes): BoardColumn {
+            $column->update([
+                'name' => trim($name),
+            ]);
+            $freshColumn = $column->fresh();
+            if ($changes) {
+                $this->logger->execute($user, $column->board->workspace, 'column.updated', $column->board, $freshColumn, ['column_name' => $freshColumn->name, 'changes' => $changes]);
+                BoardChanged::dispatch('column.updated', (int) $column->board->workspace_id, (int) $column->board_id, [
+                    'column' => RealtimePayload::column($freshColumn),
+                ]);
+            }
+
+            return $freshColumn;
+        });
     }
 }

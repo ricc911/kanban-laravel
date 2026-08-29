@@ -143,6 +143,7 @@
     }
 
     .board-presence {
+      position: relative;
       min-height: 32px;
       display: inline-flex;
       align-items: center;
@@ -153,6 +154,60 @@
       background: #101722;
       color: var(--text);
       white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .board-presence-popover {
+      position: absolute;
+      z-index: 20;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 190px;
+      padding: 12px;
+      border: 1px solid #34465f;
+      border-radius: 10px;
+      background: #172333;
+      box-shadow: 0 14px 30px rgba(0, 0, 0, .3);
+      color: #dce5ef;
+      white-space: normal;
+      cursor: default;
+    }
+
+    .board-presence-popover * {
+      cursor: default;
+    }
+
+    .board-presence-popover-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .board-presence-close {
+      width: 24px;
+      height: 24px;
+      display: inline-grid;
+      place-items: center;
+      padding: 0;
+      border: 1px solid #3b4f69;
+      border-radius: 6px;
+      background: transparent;
+      color: #cbd5e1;
+      cursor: pointer;
+      font-size: 17px;
+      line-height: 1;
+    }
+
+    .board-presence-close:hover {
+      background: #223149;
+      color: #fff;
+    }
+
+    .board-presence-list-item {
+      padding-top: 8px;
+      color: #aebbd0;
+      font-size: 12px;
     }
 
     .board-presence-status {
@@ -270,7 +325,7 @@
     }
 
     .page {
-      width: min(1500px, calc(100% - 36px));
+      width: min(1500px, calc(100% - 10px));
       margin: 0 auto;
       padding: 34px 0 48px;
     }
@@ -297,7 +352,7 @@
 
     .board {
       display: grid;
-      grid-template-columns: repeat(3, minmax(320px, 1fr));
+      grid-template-columns: repeat(var(--board-column-count, 1), minmax(0, 1fr));
       gap: 18px;
       align-items: stretch;
       min-height: calc(100vh - 180px);
@@ -487,10 +542,11 @@
     .task {
       position: relative;
       border: 1px solid var(--task-color);
+      background: color-mix(in srgb, var(--task-color) 24%, #13191b);
       background: linear-gradient(
         145deg,
-        color-mix(in srgb, var(--task-color) 14%, #13191b),
-        #111719 72%
+        color-mix(in srgb, var(--task-color) 32%, #13191b),
+        color-mix(in srgb, var(--task-color) 18%, #111719) 72%
       );
       border-radius: 11px;
       padding: 14px 42px 14px 14px;
@@ -595,6 +651,8 @@
     }
 
     .close {
+      display: grid;
+      place-items: center;
       width: 38px;
       height: 38px;
       border-radius: 8px;
@@ -603,6 +661,7 @@
       color: #d9dfe1;
       cursor: pointer;
       font-size: 20px;
+      line-height: 1;
     }
 
     .modal-body {

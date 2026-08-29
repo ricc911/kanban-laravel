@@ -17,6 +17,7 @@ trait InteractsWithTaskPayload
             'board_column_id' => (int) $task->board_column_id,
             'category_id' => $task->category_id === null ? null : (int) $task->category_id,
             'title' => $task->title,
+            'color' => $task->color,
             'description' => $task->description,
             'position' => (int) $task->position,
             'priority' => $task->priority,

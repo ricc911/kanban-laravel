@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->scopeBindings()->group(function (): void {
     Route::post('workspaces', [WorkspaceController::class, 'store']);
+    Route::delete('workspaces/{workspace}', [WorkspaceController::class, 'destroy']);
     Route::post('workspaces/{workspace}/invitations', [InvitationController::class, 'store']);
     Route::get('workspaces/{workspace}/members', [WorkspaceController::class, 'members']);
     Route::get('workspaces/{workspace}/invitations', [WorkspaceController::class, 'invitations']);

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Events\ActivityLogged;
 use App\Events\TaskCreated;
 use App\Events\TaskDeleted;
 use App\Events\TaskMoved;
@@ -110,7 +111,10 @@ class BoardRealtimeTest extends TestCase
     public function test_create_task_dispatches_a_compact_created_event_on_its_board(): void
     {
         [$user, , $board, $column] = $this->sharedBoard();
-        Event::fake([TaskCreated::class]);
+        Event::fake([
+            TaskCreated::class,
+            ActivityLogged::class,
+        ]);
 
         $this->actingAs($user)
             ->postJson("/api/boards/{$board->id}/columns/{$column->id}/tasks", [
@@ -142,7 +146,10 @@ class BoardRealtimeTest extends TestCase
     {
         [$user, , $board, $column] = $this->sharedBoard();
         $task = $this->task($board, $column, 'Prima');
-        Event::fake([TaskUpdated::class]);
+        Event::fake([
+            TaskUpdated::class,
+            ActivityLogged::class,
+        ]);
 
         $this->actingAs($user)
             ->patchJson("/api/tasks/{$task->id}", [
@@ -175,7 +182,10 @@ class BoardRealtimeTest extends TestCase
         [$user, , $board, $source] = $this->sharedBoard();
         $target = BoardColumn::create(['board_id' => $board->id, 'name' => 'Doing', 'position' => 2000]);
         $task = $this->task($board, $source, 'Sposta');
-        Event::fake([TaskMoved::class]);
+        Event::fake([
+            TaskMoved::class,
+            ActivityLogged::class,
+        ]);
 
         $this->actingAs($user)
             ->postJson("/api/tasks/{$task->id}/move", [
@@ -194,7 +204,10 @@ class BoardRealtimeTest extends TestCase
     {
         [$user, $workspace, $board, $column] = $this->sharedBoard();
         $task = $this->task($board, $column, 'Da eliminare');
-        Event::fake([TaskDeleted::class]);
+        Event::fake([
+            TaskDeleted::class,
+            ActivityLogged::class,
+        ]);
 
         $this->actingAs($user)
             ->deleteJson("/api/tasks/{$task->id}")

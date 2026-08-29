@@ -34,6 +34,7 @@ class TaskController extends Controller
             $category,
             $request->validated('priority'),
             $request->validated('due_at'),
+            $request->validated('color'),
         )], 201);
     }
 
@@ -41,7 +42,7 @@ class TaskController extends Controller
     {
         $category = $request->filled('category_id') ? Category::find($request->validated('category_id')) : null;
 
-        return response()->json(['data' => $action->execute($request->user(), $task, $request->validated('title'), $request->validated('description'), $request->validated('priority'), $request->validated('due_at'), $category)]);
+        return response()->json(['data' => $action->execute($request->user(), $task, $request->validated('title'), $request->validated('description'), $request->validated('priority'), $request->validated('due_at'), $category, $request->validated('color'))]);
     }
 
     public function move(MoveTaskRequest $request, Task $task, MoveTask $action): JsonResponse

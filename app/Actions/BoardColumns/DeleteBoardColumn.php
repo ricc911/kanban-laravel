@@ -3,8 +3,11 @@
 namespace App\Actions\BoardColumns;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\BoardChanged;
 use App\Models\BoardColumn;
 use App\Models\User;
+use App\Support\RealtimePayload;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class DeleteBoardColumn
@@ -33,9 +36,15 @@ class DeleteBoardColumn
             ]);
         }
 
-        $board = $column->board;
-        $name = $column->name;
-        $column->delete();
-        $this->logger->execute($user, $board->workspace, 'column.deleted', $board, null, ['column_name' => $name]);
+        DB::transaction(function () use ($user, $column): void {
+            $board = $column->board;
+            $payload = RealtimePayload::column($column);
+            $this->logger->execute($user, $board->workspace, 'column.deleted', $board, $column, ['column_name' => $column->name]);
+            $column->delete();
+            BoardChanged::dispatch('column.deleted', (int) $board->workspace_id, (int) $board->id, [
+                'column_id' => (int) $column->id,
+                'column' => $payload,
+            ]);
+        });
     }
 }

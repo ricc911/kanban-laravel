@@ -1,6 +1,6 @@
 import '../css/board.css';
-import { formatActivity, formatActivityDate, formatActivityDetails } from './activity-log';
-import { subscribeToBoard, subscribeToBoardPresence } from './realtime';
+import { activityDayKey, formatActivity, formatActivityDate, formatActivityDay, formatActivityDetails } from './activity-log';
+import { subscribeToBoard, subscribeToBoardPresence, subscribeToUserRealtime } from './realtime';
 
 const DEFAULT_TASK_COLOR = '#2563eb';
 const DEFAULT_CATEGORY_COLOR = '#4f6f9f';
@@ -13,8 +13,10 @@ const state = {
     drag: null,
     realtimeCleanup: null,
     presenceCleanup: null,
+    userRealtimeCleanup: null,
     realtimeRenderPending: false,
     onlineBoardUsers: new Map(),
+    sharedWorkspace: false,
     editingTaskId: null,
     taskModalBaseline: {},
     latestRemoteTask: null,
@@ -22,6 +24,9 @@ const state = {
     taskModalConflicts: new Map(),
     taskModalRemoteChanged: false,
     taskModalDeleted: false,
+    boardDeleted: false,
+    activities: [],
+    activityOpenDay: null,
 };
 
 const elements = {
@@ -76,10 +81,18 @@ const elements = {
     boardPresenceStatus: document.querySelector('#boardPresenceStatus'),
     boardPresenceUsers: document.querySelector('#boardPresenceUsers'),
     boardPresenceCount: document.querySelector('#boardPresenceCount'),
+    workspaceDeletedModal: document.querySelector('#workspaceDeletedModal'),
+    boardPresencePopover: document.querySelector('#boardPresencePopover'),
+    boardPresenceClose: document.querySelector('#boardPresenceClose'),
+    boardPresenceList: document.querySelector('#boardPresenceList'),
 };
 
 function boardId() {
     return document.body.dataset.boardId;
+}
+
+function currentUserId() {
+    return document.body.dataset.userId;
 }
 
 function normalizePresenceUser(user) {
@@ -130,7 +143,16 @@ function renderOnlineBoardUsers() {
     }
 
     elements.boardPresenceCount.textContent = String(users.length);
-    elements.boardPresence.hidden = false;
+    elements.boardPresence.hidden = !state.sharedWorkspace;
+    if (elements.boardPresenceList) {
+        elements.boardPresenceList.replaceChildren();
+        users.forEach((user) => {
+            const item = document.createElement('div');
+            item.className = 'board-presence-list-item';
+            item.textContent = user.name;
+            elements.boardPresenceList.append(item);
+        });
+    }
 }
 
 function setPresenceOnline() {
@@ -170,12 +192,23 @@ function applyPresenceLeaving(user) {
     renderOnlineBoardUsers();
 }
 
-async function loadBoardActivity() {
-    const board = state.board;
-    if (!board) return;
-    const response = await request(`/api/workspaces/${board.workspace_id}/activity?board_id=${board.id}`);
+function renderBoardActivityList() {
     elements.boardActivityList.replaceChildren();
-    (response.data ?? []).forEach((activity) => {
+    const groups = new Map();
+    state.activities.forEach((activity) => {
+        const key = activityDayKey(activity.created_at);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(activity);
+    });
+    const openDay = state.activityOpenDay === undefined ? activityDayKey(new Date()) : state.activityOpenDay;
+    groups.forEach((activities, day) => {
+        const section = document.createElement('section'); section.className = 'activity-day';
+        const heading = document.createElement('button'); heading.className = 'activity-day-heading'; heading.type = 'button';
+        heading.append(icon(day === openDay ? 'chevron-down' : 'chevron-right'), document.createTextNode(formatActivityDay(day)));
+        const content = document.createElement('div'); content.className = 'activity-day-content'; content.hidden = day !== openDay;
+        heading.onclick = () => { state.activityOpenDay = openDay === day ? null : day; renderBoardActivityList(); };
+        section.append(heading, content); elements.boardActivityList.append(section);
+        activities.forEach((activity) => {
         const row = document.createElement('div');
         row.className = 'activity-row';
         const actor = document.createElement('strong'); actor.textContent = activity.actor?.name ?? 'Utente';
@@ -191,9 +224,19 @@ async function loadBoardActivity() {
             toggle.onclick = () => { box.hidden = !box.hidden; toggle.replaceChildren(icon(box.hidden ? 'chevron-down' : 'chevron-up'), document.createTextNode(box.hidden ? 'Dettagli' : 'Nascondi')); toggle.setAttribute('aria-expanded', String(!box.hidden)); refreshIcons(); };
             meta.append(toggle); row.append(box);
         }
-        elements.boardActivityList.append(row);
+        content.append(row);
+        });
     });
     refreshIcons();
+}
+
+async function loadBoardActivity() {
+    const board = state.board;
+    if (!board) return;
+    const response = await request(`/api/workspaces/${board.workspace_id}/activity?board_id=${board.id}`);
+    state.activities = response.data ?? [];
+    state.activityOpenDay = activityDayKey(new Date());
+    renderBoardActivityList();
 }
 
 elements.openActivityModal.addEventListener('click', async () => {
@@ -282,12 +325,21 @@ function normalizeCategory(category) {
     };
 }
 
+function upsertCategoryInState(category) {
+    const normalized = normalizeCategory(category);
+    state.categories = [
+        ...state.categories.filter((item) => item.id !== normalized.id),
+        normalized,
+    ].sort((left, right) => left.position - right.position);
+}
+
 function normalizeTask(task) {
     return {
         ...task,
         id: String(task.id),
         board_column_id: Number(task.board_column_id),
         category_id: task.category_id === null || task.category_id === undefined ? '' : String(task.category_id),
+        color: normalizeColor(task.color, ''),
         title: task.title ?? 'Evento',
         description: task.description ?? '',
         priority: task.priority ?? '',
@@ -603,15 +655,144 @@ function applyRemoteTasksReordered(payload) {
     renderAfterRealtimeUpdate();
 }
 
+function isCurrentBoard(payload) {
+    return Number(payload?.board_id ?? payload?.board?.id ?? payload?.activity?.board?.id) === Number(boardId());
+}
+
+function applyRemoteBoardChanged(payload) {
+    if (!isCurrentBoard(payload) || !payload.board || !state.board) return;
+
+    state.board = { ...state.board, ...payload.board };
+    renderBoard();
+}
+
+function applyRemoteBoardDeleted(payload) {
+    if (!isCurrentBoard(payload)) return;
+
+    state.board = null;
+    state.columns = [];
+    state.categories = [];
+    state.boardDeleted = true;
+    state.realtimeCleanup?.();
+    state.realtimeCleanup = null;
+    state.presenceCleanup?.();
+    state.presenceCleanup = null;
+    state.userRealtimeCleanup?.();
+    state.userRealtimeCleanup = null;
+    document.querySelectorAll('.toolbar button').forEach((button) => { button.disabled = true; });
+    document.querySelectorAll('.modal.open').forEach((modal) => modal.classList.remove('open'));
+    elements.boardColumns.replaceChildren();
+    setStatus('Questo progetto è stato eliminato da un altro utente.', true);
+}
+
+function applyRemoteCategory(payload, removed = false) {
+    if (!isCurrentBoard(payload)) return;
+
+    const categoryId = String(payload.category_id ?? payload.category?.id);
+    if (removed) {
+        state.categories = state.categories.filter((category) => category.id !== categoryId);
+        state.columns.forEach((column) => {
+            column.tasks = column.tasks.map((task) => (
+                task.category_id === categoryId ? { ...task, category_id: '' } : task
+            ));
+        });
+    } else if (payload.category) {
+        upsertCategoryInState(payload.category);
+    }
+    renderAfterRealtimeUpdate();
+}
+
+function applyRemoteColumn(payload, removed = false) {
+    if (!isCurrentBoard(payload)) return;
+
+    const columnId = Number(payload.column_id ?? payload.column?.id);
+    if (removed) {
+        state.columns = state.columns.filter((column) => column.id !== columnId);
+    } else if (payload.column) {
+        const remoteColumn = normalizeColumn({
+            ...payload.column,
+            tasks: findColumn(columnId)?.tasks ?? [],
+        });
+        state.columns = [
+            ...state.columns.filter((column) => column.id !== remoteColumn.id),
+            remoteColumn,
+        ].sort((left, right) => left.position - right.position);
+    }
+    renderAfterRealtimeUpdate();
+}
+
+function applyRemoteColumnsReordered(payload) {
+    if (!isCurrentBoard(payload) || !Array.isArray(payload.columns)) return;
+
+    const positions = new Map(payload.columns.map((column) => [Number(column.id), Number(column.position)]));
+    state.columns.forEach((column) => {
+        if (positions.has(column.id)) column.position = positions.get(column.id);
+    });
+    state.columns.sort((left, right) => left.position - right.position);
+    renderAfterRealtimeUpdate();
+}
+
+function applyRemoteActivity(payload) {
+    if (!isCurrentBoard(payload) || !payload.activity) return;
+
+    const activity = payload.activity;
+    state.activities = [
+        activity,
+        ...state.activities.filter((item) => Number(item.id) !== Number(activity.id)),
+    ];
+    if (elements.activityModal.classList.contains('open')) renderBoardActivityList();
+}
+
+function handleRemoteBoardAccessRemoved(payload) {
+    if (!state.board || Number(state.board.workspace_id) !== Number(payload?.workspace?.id ?? payload?.workspace_id)) return;
+
+    state.board = null;
+    state.columns = [];
+    state.categories = [];
+    state.boardDeleted = true;
+    state.realtimeCleanup?.();
+    state.realtimeCleanup = null;
+    state.presenceCleanup?.();
+    state.presenceCleanup = null;
+    state.userRealtimeCleanup?.();
+    state.userRealtimeCleanup = null;
+    document.querySelectorAll('.toolbar button').forEach((button) => { button.disabled = true; });
+    document.querySelectorAll('.modal.open').forEach((modal) => modal.classList.remove('open'));
+    elements.boardColumns.replaceChildren();
+    setStatus('Non hai più accesso a questo workspace.', true);
+}
+
+function handleRemoteBoardDeleted(payload) {
+    if (!state.board || Number(state.board.workspace_id) !== Number(payload?.workspace?.id ?? payload?.workspace_id)) return;
+
+    handleRemoteBoardAccessRemoved(payload);
+    elements.workspaceDeletedModal.hidden = false;
+    elements.workspaceDeletedModal.classList.add('open');
+}
+
 function subscribeToCurrentBoard() {
     state.realtimeCleanup?.();
     state.presenceCleanup?.();
+    state.userRealtimeCleanup?.();
     state.realtimeCleanup = subscribeToBoard(boardId(), {
         created: applyRemoteTaskCreated,
         updated: applyRemoteTaskUpdated,
         moved: applyRemoteTaskMoved,
         deleted: applyRemoteTaskDeleted,
         reordered: applyRemoteTasksReordered,
+        boardUpdated: applyRemoteBoardChanged,
+        boardArchived: applyRemoteBoardChanged,
+        boardRestored: applyRemoteBoardChanged,
+        boardDeleted: applyRemoteBoardDeleted,
+        categoryCreated: (payload) => applyRemoteCategory(payload),
+        categoryUpdated: (payload) => applyRemoteCategory(payload),
+        categoryDeleted: (payload) => applyRemoteCategory(payload, true),
+        columnCreated: (payload) => applyRemoteColumn(payload),
+        columnUpdated: (payload) => applyRemoteColumn(payload),
+        columnDeleted: (payload) => applyRemoteColumn(payload, true),
+        columnsReordered: applyRemoteColumnsReordered,
+        activityLogged: applyRemoteActivity,
+        error: (error) => console.warn('Realtime board non disponibile.', error),
     });
     state.presenceCleanup = subscribeToBoardPresence(boardId(), {
         here: applyPresenceHere,
@@ -619,7 +800,23 @@ function subscribeToCurrentBoard() {
         leaving: applyPresenceLeaving,
         error: setPresenceOffline,
     });
+    state.userRealtimeCleanup = subscribeToUserRealtime(currentUserId(), {
+        workspaceAccessRemoved: handleRemoteBoardAccessRemoved,
+        workspaceDeleted: handleRemoteBoardDeleted,
+        error: (error) => console.warn('Realtime utente non disponibile.', error),
+    });
 }
+
+function clearBoardRealtimeSubscriptions() {
+    state.realtimeCleanup?.();
+    state.realtimeCleanup = null;
+    state.presenceCleanup?.();
+    state.presenceCleanup = null;
+    state.userRealtimeCleanup?.();
+    state.userRealtimeCleanup = null;
+}
+
+window.addEventListener('pagehide', clearBoardRealtimeSubscriptions);
 
 function findCategory(categoryId) {
     return state.categories.find((category) => category.id === String(categoryId)) ?? null;
@@ -685,6 +882,7 @@ function updateTaskPositions(column) {
 }
 
 function renderCategorySelect() {
+    const selectedCategory = elements.categorySelect.value;
     elements.categorySelect.replaceChildren();
 
     const empty = document.createElement('option');
@@ -698,6 +896,9 @@ function renderCategorySelect() {
         option.textContent = category.name;
         elements.categorySelect.append(option);
     });
+    elements.categorySelect.value = state.categories.some((category) => category.id === selectedCategory)
+        ? selectedCategory
+        : '';
 }
 
 function renderCategoryList() {
@@ -753,7 +954,7 @@ function renderTask(task) {
     article.className = 'task';
     article.draggable = true;
     article.dataset.id = task.id;
-    article.style.setProperty('--task-color', category?.color ?? DEFAULT_TASK_COLOR);
+    article.style.setProperty('--task-color', task.color || category?.color || DEFAULT_TASK_COLOR);
 
     const menu = document.createElement('button');
     menu.className = 'task-menu';
@@ -924,6 +1125,7 @@ function renderBoard() {
     }
 
     elements.boardColumns.replaceChildren();
+    elements.boardColumns.style.setProperty('--board-column-count', String(Math.min(6, Math.max(1, state.columns.length))));
     state.columns.forEach((column) => elements.boardColumns.append(renderColumn(column)));
     renderCategorySelect();
     renderCategoryList();
@@ -947,6 +1149,8 @@ function setError(error) {
     state.realtimeCleanup = null;
     state.presenceCleanup?.();
     state.presenceCleanup = null;
+    state.userRealtimeCleanup?.();
+    state.userRealtimeCleanup = null;
     state.onlineBoardUsers.clear();
     setPresenceOffline();
     elements.title.textContent = 'Errore database';
@@ -960,10 +1164,17 @@ async function loadBoard() {
     setStatus('Connessione al database...');
 
     try {
-        const response = await request(`/api/boards/${encodeURIComponent(boardId())}`);
+        const [response, workspacesResponse] = await Promise.all([
+            request(`/api/boards/${encodeURIComponent(boardId())}`),
+            request('/api/workspaces'),
+        ]);
         const board = response.data ?? response;
 
         state.board = board;
+        state.sharedWorkspace = (workspacesResponse.data ?? []).some((workspace) => (
+            Number(workspace.id) === Number(board.workspace_id) && workspace.type === 'shared'
+        ));
+        state.boardDeleted = false;
         state.categories = (board.categories ?? [])
             .map(normalizeCategory)
             .sort((left, right) => left.position - right.position);
@@ -987,15 +1198,24 @@ function closeModal(id) {
     if (id === 'taskModal') clearTaskModalRealtimeState();
 }
 
+function setTaskColor(value) {
+    const color = normalizeColor(value, DEFAULT_TASK_COLOR);
+    const preset = [...elements.taskColorPreset.options].find((option) => (
+        option.value && option.value.toLowerCase() === color.toLowerCase()
+    ));
+
+    elements.taskColor.value = color;
+    elements.taskColorText.value = color;
+    elements.taskColorPreset.value = preset?.value ?? '';
+}
+
 function resetTaskForm() {
     clearTaskModalRealtimeState();
     elements.taskForm.reset();
     elements.taskId.value = '';
     elements.taskModalTitle.textContent = 'Nuovo evento';
     elements.deleteTask.style.display = 'none';
-    elements.taskColor.value = DEFAULT_TASK_COLOR;
-    elements.taskColorText.value = DEFAULT_TASK_COLOR;
-    elements.taskColorPreset.value = DEFAULT_TASK_COLOR;
+    setTaskColor(DEFAULT_TASK_COLOR);
     elements.categorySelect.value = '';
     elements.taskForm.dataset.columnId = state.columns[0]?.id ?? '';
 }
@@ -1008,10 +1228,8 @@ function editTask(task) {
     elements.categorySelect.value = task.category_id ?? '';
     elements.taskPriority.value = task.priority ?? '';
     elements.taskDueAt.value = toDateInput(task.due_at);
-    const color = findCategory(task.category_id)?.color ?? DEFAULT_TASK_COLOR;
-    elements.taskColor.value = color;
-    elements.taskColorText.value = color;
-    elements.taskColorPreset.value = color;
+    const color = task.color || findCategory(task.category_id)?.color || DEFAULT_TASK_COLOR;
+    setTaskColor(color);
     elements.taskForm.dataset.columnId = String(task.board_column_id);
     elements.taskModalTitle.textContent = 'Modifica evento';
     elements.deleteTask.style.display = 'inline-flex';
@@ -1067,6 +1285,7 @@ async function saveTask() {
         category_id: categoryId,
         priority: elements.taskPriority.value || null,
         due_at: elements.taskDueAt.value || null,
+        color: normalizeColor(elements.taskColorText.value, DEFAULT_TASK_COLOR),
     };
 
     if (!payload.title) return;
@@ -1130,8 +1349,7 @@ async function saveCategory() {
         method: 'POST',
         body: JSON.stringify(payload),
     });
-    state.categories.push(normalizeCategory(response.data));
-    state.categories.sort((left, right) => left.position - right.position);
+    upsertCategoryInState(response.data);
 }
 
 async function deleteCategory(id) {
@@ -1163,8 +1381,11 @@ async function saveColumn() {
         method: 'POST',
         body: JSON.stringify(payload),
     });
-    state.columns.push(normalizeColumn({ ...response.data, tasks: [] }));
-    state.columns.sort((left, right) => left.position - right.position);
+    const createdColumn = normalizeColumn({ ...response.data, tasks: [] });
+    state.columns = [
+        ...state.columns.filter((column) => column.id !== createdColumn.id),
+        createdColumn,
+    ].sort((left, right) => left.position - right.position);
 }
 
 async function deleteCurrentColumn() {
@@ -1487,19 +1708,35 @@ Object.entries(editableTaskFields).forEach(([field, element]) => {
 
 elements.taskColorPreset.addEventListener('change', (event) => {
     if (!event.target.value) return;
-    elements.taskColor.value = event.target.value;
-    elements.taskColorText.value = event.target.value;
+    setTaskColor(event.target.value);
 });
 elements.taskColor.addEventListener('input', (event) => {
-    elements.taskColorText.value = event.target.value;
-    elements.taskColorPreset.value = event.target.value;
+    setTaskColor(event.target.value);
 });
 elements.taskColorText.addEventListener('input', (event) => {
     if (/^#[0-9a-f]{6}$/i.test(event.target.value)) {
-        elements.taskColor.value = event.target.value;
-        elements.taskColorPreset.value = event.target.value;
+        setTaskColor(event.target.value);
     } else {
         elements.taskColorPreset.value = '';
+    }
+});
+
+elements.boardPresence.addEventListener('click', (event) => {
+    if (!state.sharedWorkspace) return;
+
+    if (event.target.closest('#boardPresencePopover')) return;
+
+    elements.boardPresencePopover.hidden = !elements.boardPresencePopover.hidden;
+});
+
+elements.boardPresenceClose.addEventListener('click', (event) => {
+    event.stopPropagation();
+    elements.boardPresencePopover.hidden = true;
+});
+
+document.addEventListener('click', (event) => {
+    if (!elements.boardPresence.contains(event.target)) {
+        elements.boardPresencePopover.hidden = true;
     }
 });
 

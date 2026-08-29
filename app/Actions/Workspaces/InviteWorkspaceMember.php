@@ -3,9 +3,11 @@
 namespace App\Actions\Workspaces;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\UserRealtimeEvent;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceInvitation;
+use App\Support\RealtimePayload;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -71,6 +73,22 @@ class InviteWorkspaceMember
             ]
         );
         $this->logger->execute($actor, $workspace, 'workspace.member_invited', null, $invitation, ['email' => $email]);
+
+        $invitation->loadMissing(['workspace.owner:id,name', 'workspace:id,name,owner_id,type']);
+        $recipient = User::query()
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->first();
+
+        if ($recipient !== null) {
+            UserRealtimeEvent::dispatch('invitation.created', (int) $recipient->id, [
+                'invitation' => RealtimePayload::invitation($invitation),
+            ]);
+        }
+
+        UserRealtimeEvent::dispatch('invitation.pending.created', (int) $actor->id, [
+            'workspace_id' => (int) $workspace->id,
+            'invitation_id' => (int) $invitation->id,
+        ]);
 
         return $invitation;
     }

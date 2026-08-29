@@ -51,6 +51,20 @@ export function formatActivityDate(value) {
     return new Intl.DateTimeFormat('it-IT', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 
+export function activityDayKey(value) {
+    const date = new Date(value);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+export function formatActivityDay(value) {
+    const date = new Date(`${value}T12:00:00`);
+    const today = activityDayKey(new Date());
+    const yesterday = activityDayKey(new Date(Date.now() - 86400000));
+    if (value === today) return 'Oggi';
+    if (value === yesterday) return 'Ieri';
+    return new Intl.DateTimeFormat('it-IT', { dateStyle: 'full' }).format(date);
+}
+
 const detailLabels = { title: 'Titolo', description: 'Descrizione', priority: 'Priorità', due_at: 'Scadenza', category: 'Categoria', name: 'Nome', color: 'Colore' };
 const priorities = { low: 'Bassa', medium: 'Media', high: 'Alta' };
 

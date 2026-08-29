@@ -24,7 +24,8 @@ class CreateTask
         ?string $description = null,
         ?Category $category = null,
         ?string $priority = null,
-        ?string $dueAt = null
+        ?string $dueAt = null,
+        ?string $color = null
     ): Task {
         if (! $board->workspace->hasMember($user)) {
             throw ValidationException::withMessages([
@@ -47,7 +48,7 @@ class CreateTask
             ]);
         }
 
-        return DB::transaction(function () use ($user, $board, $column, $category, $title, $description, $priority, $dueAt): Task {
+        return DB::transaction(function () use ($user, $board, $column, $category, $title, $description, $priority, $dueAt, $color): Task {
             $position = (($column->tasks()->max('position') ?? 0) + 1000);
 
             $task = Task::create([
@@ -55,6 +56,7 @@ class CreateTask
                 'board_column_id' => $column->id,
                 'category_id' => $category?->id,
                 'title' => trim($title),
+                'color' => $color ?? '#2563eb',
                 'description' => $description,
                 'priority' => $priority,
                 'due_at' => $dueAt,

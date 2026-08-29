@@ -12,6 +12,7 @@ class Task extends Model
         'board_column_id',
         'category_id',
         'title',
+        'color',
         'description',
         'position',
         'priority',

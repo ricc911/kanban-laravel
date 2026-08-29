@@ -3,9 +3,11 @@
 namespace App\Actions\Folders;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\WorkspaceChanged;
 use App\Models\Board;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\RealtimePayload;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -39,6 +41,9 @@ class ArchiveFolder
                 ->whereIn('folder_id', $folderIds)
                 ->update(['archived' => $archived]);
             $this->logger->execute($user, $folder->workspace, $archived ? 'folder.archived' : 'folder.restored', null, $folder, ['folder_name' => $folder->name]);
+            WorkspaceChanged::dispatch($archived ? 'folder.archived' : 'folder.restored', (int) $folder->workspace_id, [
+                'folder' => RealtimePayload::folder($folder->fresh()),
+            ]);
         });
 
         return $folder->fresh();

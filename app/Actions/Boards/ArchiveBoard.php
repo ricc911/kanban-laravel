@@ -3,8 +3,11 @@
 namespace App\Actions\Boards;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\BoardChanged;
 use App\Models\Board;
 use App\Models\User;
+use App\Support\RealtimePayload;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ArchiveBoard
@@ -19,9 +22,20 @@ class ArchiveBoard
             ]);
         }
 
-        $board->update(['archived' => $archived]);
-        $this->logger->execute($user, $board->workspace, $archived ? 'board.archived' : 'board.restored', $board, $board, ['board_name' => $board->name]);
+        return DB::transaction(function () use ($user, $board, $archived): Board {
+            if ((bool) $board->archived === $archived) {
+                return $board->fresh();
+            }
 
-        return $board->fresh();
+            $board->update(['archived' => $archived]);
+            $freshBoard = $board->fresh();
+            $action = $archived ? 'board.archived' : 'board.restored';
+            $this->logger->execute($user, $board->workspace, $action, $freshBoard, $freshBoard, ['board_name' => $freshBoard->name]);
+            BoardChanged::dispatch($action, (int) $board->workspace_id, (int) $board->id, [
+                'board' => RealtimePayload::board($freshBoard),
+            ], true);
+
+            return $freshBoard;
+        });
     }
 }

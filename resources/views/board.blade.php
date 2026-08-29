@@ -11,7 +11,7 @@
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
     @vite(['resources/css/app.css', 'resources/js/board.js'])
 </head>
-<body data-board-id="{{ $board }}">
+<body data-board-id="{{ $board }}" data-user-id="{{ auth()->id() }}">
     <header class="topbar">
         <div class="brand">
             <div class="brand-badge">KB</div>
@@ -22,10 +22,17 @@
         </div>
 
         <div class="toolbar">
-            <div class="board-presence" id="boardPresence" aria-label="Utenti online">
+            <div class="board-presence" id="boardPresence" aria-label="Utenti online" hidden>
                 <span class="board-presence-status"><span class="board-presence-dot" aria-hidden="true"></span><span id="boardPresenceStatus">Online</span></span>
                 <div class="board-presence-users" id="boardPresenceUsers"></div>
                 <span class="board-presence-count" id="boardPresenceCount">0</span>
+                <div class="board-presence-popover" id="boardPresencePopover" hidden>
+                    <div class="board-presence-popover-head">
+                        <strong>Persone attive</strong>
+                        <button class="board-presence-close" id="boardPresenceClose" type="button" aria-label="Chiudi elenco persone attive">&times;</button>
+                    </div>
+                    <div id="boardPresenceList"></div>
+                </div>
             </div>
             <a class="btn home-link" data-back-to-projects href="/">&larr; Progetti</a>
             <button class="btn" type="button" id="openColumnModal">+ Colonna</button>
@@ -39,6 +46,16 @@
         <div class="modal activity-modal" role="dialog" aria-modal="true" aria-labelledby="activityModalTitle">
             <div class="modal-head"><h2 id="activityModalTitle">Cronologia</h2><button class="close" type="button" data-close="activityModal">&times;</button></div>
             <div class="modal-body"><div id="boardActivityList"></div></div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="workspaceDeletedModal" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="workspaceDeletedTitle">
+            <div class="modal-head"><h2 id="workspaceDeletedTitle">Workspace eliminato</h2></div>
+            <div class="modal-body">
+                <p>Il workspace è stato eliminato dal proprietario. Questa board non è più disponibile.</p>
+                <div class="modal-actions"><a class="btn btn-primary" href="/">Torna alla dashboard</a></div>
+            </div>
         </div>
     </div>
 

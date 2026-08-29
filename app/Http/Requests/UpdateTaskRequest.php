@@ -24,6 +24,7 @@ class UpdateTaskRequest extends FormRequest
     {
         return [
             'title' => ['required', 'string', 'max:255'],
+            'color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'description' => ['nullable', 'string'],
             'priority' => ['nullable', 'string', 'max:255'],
             'due_at' => ['nullable', 'date'],

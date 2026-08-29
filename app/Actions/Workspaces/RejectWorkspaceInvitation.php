@@ -3,8 +3,10 @@
 namespace App\Actions\Workspaces;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\UserRealtimeEvent;
 use App\Models\User;
 use App\Models\WorkspaceInvitation;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class RejectWorkspaceInvitation
@@ -17,9 +19,17 @@ class RejectWorkspaceInvitation
             throw ValidationException::withMessages(['invitation' => 'Questo invito non è destinato a te.']);
         }
 
-        $workspace = $invitation->workspace;
-        $email = $invitation->email;
-        $invitation->delete();
-        $this->logger->execute($user, $workspace, 'workspace.invitation_rejected', null, null, ['email' => $email]);
+        DB::transaction(function () use ($user, $invitation): void {
+            $workspace = $invitation->workspace;
+            $ownerId = (int) $workspace->owner_id;
+            $invitationId = (int) $invitation->id;
+            $email = $invitation->email;
+            $invitation->delete();
+            $this->logger->execute($user, $workspace, 'workspace.invitation_rejected', null, null, ['email' => $email]);
+            UserRealtimeEvent::dispatch('invitation.rejected', $ownerId, [
+                'workspace_id' => (int) $workspace->id,
+                'invitation_id' => $invitationId,
+            ]);
+        });
     }
 }

@@ -2,6 +2,7 @@
 
 use App\Models\Board;
 use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
@@ -21,4 +22,12 @@ Broadcast::channel('board-presence.{board}', function (User $user, Board $board)
         'id' => (int) $user->id,
         'name' => $user->name,
     ];
+});
+
+Broadcast::channel('workspace.{workspace}', function (User $user, Workspace $workspace): bool {
+    return $workspace->isOwner($user) || $workspace->hasMember($user);
+});
+
+Broadcast::channel('user.{id}', function (User $authenticatedUser, $id): bool {
+    return (int) $authenticatedUser->id === (int) $id;
 });

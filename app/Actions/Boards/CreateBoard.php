@@ -3,10 +3,12 @@
 namespace App\Actions\Boards;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\BoardChanged;
 use App\Models\Board;
 use App\Models\Folder;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Support\RealtimePayload;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -75,6 +77,9 @@ class CreateBoard
             ]);
 
             $this->logger->execute($user, $workspace, 'board.created', $board, $board, ['board_name' => $board->name]);
+            BoardChanged::dispatch('board.created', (int) $workspace->id, (int) $board->id, [
+                'board' => RealtimePayload::board($board),
+            ], true);
 
             return $board->load('columns');
         });

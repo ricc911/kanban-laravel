@@ -3,8 +3,11 @@
 namespace App\Actions\Categories;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\BoardChanged;
 use App\Models\Category;
 use App\Models\User;
+use App\Support\RealtimePayload;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class UpdateCategory
@@ -29,14 +32,21 @@ class UpdateCategory
                 $changes[$field] = ['old' => $old, 'new' => $new];
             }
         }
-        $category->update([
-            'name' => trim($name),
-            'color' => $color,
-        ]);
-        if ($changes) {
-            $this->logger->execute($user, $category->board->workspace, 'category.updated', $category->board, $category, ['category_name' => $category->name, 'changes' => $changes]);
-        }
 
-        return $category->fresh();
+        return DB::transaction(function () use ($user, $category, $name, $color, $changes): Category {
+            $category->update([
+                'name' => trim($name),
+                'color' => $color,
+            ]);
+            $freshCategory = $category->fresh();
+            if ($changes) {
+                $this->logger->execute($user, $category->board->workspace, 'category.updated', $category->board, $freshCategory, ['category_name' => $freshCategory->name, 'changes' => $changes]);
+                BoardChanged::dispatch('category.updated', (int) $category->board->workspace_id, (int) $category->board_id, [
+                    'category' => RealtimePayload::category($freshCategory),
+                ]);
+            }
+
+            return $freshCategory;
+        });
     }
 }

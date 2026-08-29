@@ -3,8 +3,11 @@
 namespace App\Actions\Boards;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\BoardChanged;
 use App\Models\Board;
 use App\Models\User;
+use App\Support\RealtimePayload;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class UpdateBoard
@@ -25,15 +28,22 @@ class UpdateBoard
                 $changes[$field] = ['old' => $old, 'new' => $new];
             }
         }
-        $board->update([
-            'name' => trim($name),
-            'description' => $description,
-            'color' => $color,
-        ]);
-        if ($changes) {
-            $this->logger->execute($user, $board->workspace, 'board.updated', $board, $board, ['board_name' => $board->name, 'changes' => $changes]);
-        }
 
-        return $board->fresh();
+        return DB::transaction(function () use ($user, $board, $name, $description, $color, $changes): Board {
+            $board->update([
+                'name' => trim($name),
+                'description' => $description,
+                'color' => $color,
+            ]);
+            $freshBoard = $board->fresh();
+            if ($changes) {
+                $this->logger->execute($user, $board->workspace, 'board.updated', $freshBoard, $freshBoard, ['board_name' => $freshBoard->name, 'changes' => $changes]);
+                BoardChanged::dispatch('board.updated', (int) $board->workspace_id, (int) $freshBoard->id, [
+                    'board' => RealtimePayload::board($freshBoard),
+                ], true);
+            }
+
+            return $freshBoard;
+        });
     }
 }

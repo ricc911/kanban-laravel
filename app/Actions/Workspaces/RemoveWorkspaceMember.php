@@ -3,8 +3,12 @@
 namespace App\Actions\Workspaces;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\UserRealtimeEvent;
+use App\Events\WorkspaceChanged;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Support\RealtimePayload;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class RemoveWorkspaceMember
@@ -26,7 +30,15 @@ class RemoveWorkspaceMember
                 'member' => 'Questo utente non fa parte del workspace.',
             ]);
         }
-        $workspace->members()->detach($member->id);
-        $this->logger->execute($actor, $workspace, 'workspace.member_removed', null, null, ['member_name' => $member->name]);
+        DB::transaction(function () use ($actor, $workspace, $member): void {
+            $this->logger->execute($actor, $workspace, 'workspace.member_removed', null, null, ['member_name' => $member->name]);
+            $workspace->members()->detach($member->id);
+            WorkspaceChanged::dispatch('workspace.member_removed', (int) $workspace->id, [
+                'member' => RealtimePayload::member($member, 'member'),
+            ]);
+            UserRealtimeEvent::dispatch('workspace.access_removed', (int) $member->id, [
+                'workspace' => RealtimePayload::workspace($workspace),
+            ]);
+        });
     }
 }
