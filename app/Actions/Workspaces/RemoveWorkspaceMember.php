@@ -17,7 +17,7 @@ class RemoveWorkspaceMember
 
     public function execute(User $actor, Workspace $workspace, User $member): void
     {
-        if (! $actor->can('update', $workspace) || $workspace->type !== 'shared') {
+        if (! $workspace->canManageMember($actor, $member)) {
             throw ValidationException::withMessages(['workspace' => 'Non hai il permesso di gestire questo workspace.']);
         }
         if ($member->id === $workspace->owner_id) {

@@ -18,12 +18,17 @@ class InviteWorkspaceMember
     public function execute(
         User $actor,
         Workspace $workspace,
-        string $email
+        string $email,
+        string $role = 'member'
     ): WorkspaceInvitation {
-        if (! $actor->can('invite', $workspace)) {
+        if (! $workspace->canManageMembers($actor)) {
             throw ValidationException::withMessages([
                 'workspace' => 'Non hai il permesso di invitare membri.',
             ]);
+        }
+
+        if ($workspace->roleFor($actor) === 'admin' && $role === 'admin') {
+            throw ValidationException::withMessages(['role' => 'Un amministratore può invitare solo membri o visualizzatori.']);
         }
 
         $workspace->loadMissing('owner.subscription.plan');
@@ -66,7 +71,7 @@ class InviteWorkspaceMember
                 'email' => $email,
             ],
             [
-                'role' => 'member',
+                'role' => $role,
                 'token' => Str::random(64),
                 'expires_at' => now()->addDays(7),
                 'accepted_at' => null,

@@ -17,7 +17,7 @@ class ArchiveFolder
 
     public function execute(User $user, Folder $folder, bool $archived): Folder
     {
-        if (! $folder->workspace->hasMember($user)) {
+        if (! $folder->workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
                 'folder' => 'Non hai accesso a questa cartella.',
             ]);

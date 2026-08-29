@@ -22,6 +22,9 @@ class StoreWorkspaceInvitationRequest extends FormRequest
      */
     public function rules(): array
     {
-        return ['email' => ['required', 'email', 'max:255']];
+        return [
+            'email' => ['required', 'email', 'max:255'],
+            'role' => ['nullable', 'in:admin,member,viewer'],
+        ];
     }
 }

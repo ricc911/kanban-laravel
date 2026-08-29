@@ -16,7 +16,7 @@ class UpdateBoard
 
     public function execute(User $user, Board $board, string $name, ?string $description = null, ?string $color = null): Board
     {
-        if (! $board->workspace->hasMember($user)) {
+        if (! $board->workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
                 'board' => 'Non hai accesso a questa board.',
             ]);

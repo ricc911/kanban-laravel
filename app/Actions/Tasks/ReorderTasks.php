@@ -16,7 +16,7 @@ class ReorderTasks
         BoardColumn $column,
         array $taskIds
     ): void {
-        if (! $column->board->workspace->hasMember($user)) {
+        if (! $column->board->workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
                 'column' => 'Non hai accesso a questa colonna.',
             ]);

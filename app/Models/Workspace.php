@@ -58,4 +58,41 @@ class Workspace extends Model
     {
         return $this->owner_id === $user->id;
     }
+
+    public function roleFor(User $user): ?string
+    {
+        if ($this->isOwner($user)) {
+            return 'owner';
+        }
+
+        return $this->members()->whereKey($user->id)->first()?->pivot?->role;
+    }
+
+    public function canEditContent(User $user): bool
+    {
+        return in_array($this->roleFor($user), ['owner', 'admin', 'member'], true);
+    }
+
+    public function canManageMembers(User $user): bool
+    {
+        return in_array($this->roleFor($user), ['owner', 'admin'], true);
+    }
+
+    public function canManageMember(User $actor, User $target): bool
+    {
+        $actorRole = $this->roleFor($actor);
+        $targetRole = $this->roleFor($target);
+
+        if ($this->type !== 'shared' || $target->id === $this->owner_id || $targetRole === null) {
+            return false;
+        }
+
+        return $actorRole === 'owner'
+            || ($actorRole === 'admin' && in_array($targetRole, ['member', 'viewer'], true));
+    }
+
+    public function isViewer(User $user): bool
+    {
+        return $this->roleFor($user) === 'viewer';
+    }
 }

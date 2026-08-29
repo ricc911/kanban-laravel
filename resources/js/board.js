@@ -25,6 +25,7 @@ const state = {
     taskModalRemoteChanged: false,
     taskModalDeleted: false,
     boardDeleted: false,
+    workspaceRole: 'member',
     activities: [],
     activityOpenDay: null,
 };
@@ -762,6 +763,13 @@ function handleRemoteBoardAccessRemoved(payload) {
     setStatus('Non hai più accesso a questo workspace.', true);
 }
 
+function handleRemoteBoardRoleUpdated(payload) {
+    if (!state.board || Number(state.board.workspace_id) !== Number(payload?.workspace?.id)) return;
+
+    state.workspaceRole = payload.role ?? state.workspaceRole;
+    renderBoard();
+}
+
 function handleRemoteBoardDeleted(payload) {
     if (!state.board || Number(state.board.workspace_id) !== Number(payload?.workspace?.id ?? payload?.workspace_id)) return;
 
@@ -802,6 +810,7 @@ function subscribeToCurrentBoard() {
     });
     state.userRealtimeCleanup = subscribeToUserRealtime(currentUserId(), {
         workspaceAccessRemoved: handleRemoteBoardAccessRemoved,
+        workspaceRoleUpdated: handleRemoteBoardRoleUpdated,
         workspaceDeleted: handleRemoteBoardDeleted,
         error: (error) => console.warn('Realtime utente non disponibile.', error),
     });
@@ -1114,6 +1123,10 @@ function renderColumn(column) {
 function renderBoard() {
     if (!state.board) return;
 
+    const viewer = state.workspaceRole === 'viewer';
+    document.body.classList.toggle('viewer-mode', viewer);
+    [elements.openColumnModal, elements.openCategoryModal, elements.openTaskModal].forEach((button) => { if (button) button.hidden = viewer; });
+
     elements.title.textContent = state.board.name ?? 'Kanban';
 
     if (state.board.description) {
@@ -1171,6 +1184,8 @@ async function loadBoard() {
         const board = response.data ?? response;
 
         state.board = board;
+        const currentWorkspace = (workspacesResponse.data ?? []).find((workspace) => Number(workspace.id) === Number(board.workspace_id));
+        state.workspaceRole = currentWorkspace?.current_user_role ?? currentWorkspace?.pivot?.role ?? 'member';
         state.sharedWorkspace = (workspacesResponse.data ?? []).some((workspace) => (
             Number(workspace.id) === Number(board.workspace_id) && workspace.type === 'shared'
         ));
@@ -1550,6 +1565,7 @@ function columnInsertionIndex(clientX) {
 }
 
 function bindDragEvents() {
+    if (state.workspaceRole === 'viewer') return;
     document.querySelectorAll('.task').forEach((task) => {
         task.addEventListener('dragstart', (event) => {
             state.drag = {

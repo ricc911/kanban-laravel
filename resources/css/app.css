@@ -891,6 +891,12 @@
       gap: 4px;
     }
 
+    .viewer-mode .project-card-edit,
+    .viewer-mode .project-side-actions,
+    .viewer-mode .folder-card-actions {
+      display: none;
+    }
+
     .workspace-section {
       margin-bottom: 20px;
     }

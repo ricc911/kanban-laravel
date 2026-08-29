@@ -378,6 +378,18 @@
       background: #141d29;
     }
 
+    .viewer-mode .column-actions,
+    .viewer-mode .category-actions,
+    .viewer-mode .task-menu {
+      display: none;
+    }
+
+    .viewer-mode .column-header,
+    .viewer-mode .category-group-header,
+    .viewer-mode .task {
+      cursor: default;
+    }
+
     .column-title {
       margin: 0;
       font-size: 15px;

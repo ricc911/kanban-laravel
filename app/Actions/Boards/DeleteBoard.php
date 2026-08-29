@@ -16,7 +16,7 @@ class DeleteBoard
 
     public function execute(User $user, Board $board): void
     {
-        if (! $board->workspace->hasMember($user)) {
+        if (! $board->workspace->canEditContent($user)) {
             throw ValidationException::withMessages(['board' => 'Non hai accesso a questa board.']);
         }
 

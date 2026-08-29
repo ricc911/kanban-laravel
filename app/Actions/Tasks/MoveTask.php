@@ -20,7 +20,7 @@ class MoveTask
         BoardColumn $targetColumn,
         int $position
     ): Task {
-        if (! $task->board->workspace->hasMember($user)) {
+        if (! $task->board->workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
                 'task' => 'Non hai accesso a questa task.',
             ]);

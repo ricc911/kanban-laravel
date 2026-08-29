@@ -27,7 +27,7 @@ class CreateTask
         ?string $dueAt = null,
         ?string $color = null
     ): Task {
-        if (! $board->workspace->hasMember($user)) {
+        if (! $board->workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
                 'board' => 'Non hai accesso a questa board.',
             ]);

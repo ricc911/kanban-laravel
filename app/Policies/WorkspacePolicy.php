@@ -16,7 +16,7 @@ class WorkspacePolicy
 
     public function update(User $user, Workspace $workspace): bool
     {
-        return $workspace->owner_id === $user->id;
+        return $workspace->isOwner($user);
     }
 
     public function delete(User $user, Workspace $workspace): bool
@@ -27,7 +27,11 @@ class WorkspacePolicy
 
     public function invite(User $user, Workspace $workspace): bool
     {
-        return $workspace->type === 'shared'
-            && $workspace->owner_id === $user->id;
+        return $workspace->type === 'shared' && $workspace->canManageMembers($user);
+    }
+
+    public function manageMembers(User $user, Workspace $workspace): bool
+    {
+        return $workspace->type === 'shared' && $workspace->canManageMembers($user);
     }
 }

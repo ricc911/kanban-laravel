@@ -40,6 +40,7 @@ export function formatActivity(activity) {
         'workspace.member_invited': `ha invitato ${metadata.email ?? 'un membro'} nel workspace`,
         'workspace.member_joined': 'è entrato nel workspace',
         'workspace.member_removed': `ha rimosso ${metadata.member_name ?? 'un membro'} dal workspace`,
+        'workspace.member_role_updated': `ha cambiato il ruolo di ${metadata.member_name ?? 'un membro'} da ${metadata.old_role ?? 'un ruolo'} a ${metadata.new_role ?? 'un ruolo'}`,
         'workspace.member_left': 'ha lasciato il workspace',
         'workspace.invitation_rejected': 'ha rifiutato l’invito al workspace',
     };

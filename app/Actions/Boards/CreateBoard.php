@@ -23,7 +23,7 @@ class CreateBoard
         ?Folder $folder = null,
         ?string $color = null
     ): Board {
-        if (! $workspace->hasMember($user)) {
+        if (! $workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
                 'workspace' => 'Non fai parte di questo workspace.',
             ]);

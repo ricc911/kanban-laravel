@@ -18,7 +18,7 @@ class DeleteCategory
         User $user,
         Category $category
     ): void {
-        if (! $category->board->workspace->hasMember($user)) {
+        if (! $category->board->workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
                 'category' => 'Non hai accesso a questa categoria.',
             ]);

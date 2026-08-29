@@ -29,7 +29,7 @@ class InvitationController extends Controller
 
     public function store(StoreWorkspaceInvitationRequest $request, Workspace $workspace, InviteWorkspaceMember $action): JsonResponse
     {
-        return response()->json(['data' => $action->execute($request->user(), $workspace, $request->validated('email'))], 201);
+        return response()->json(['data' => $action->execute($request->user(), $workspace, $request->validated('email'), $request->validated('role') ?? 'member')], 201);
     }
 
     public function accept(AcceptWorkspaceInvitationRequest $request, AcceptWorkspaceInvitation $action, string $token): JsonResponse

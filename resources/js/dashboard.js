@@ -69,6 +69,7 @@ const elements = {
     pendingInvitations: document.querySelector('[data-pending-invitations]'),
     inviteForm: document.querySelector('[data-invite-form]'),
     inviteEmail: document.querySelector('[data-invite-email]'),
+    inviteRole: document.querySelector('[data-invite-role]'),
     leaveWorkspace: document.querySelector('[data-leave-workspace]'),
     deleteWorkspace: document.querySelector('[data-delete-workspace]'),
     folderPath: document.querySelector('[data-folder-path]'),
@@ -225,6 +226,7 @@ function normalizeBoard(board) {
 function normalizeWorkspace(workspace) {
     return {
         ...workspace,
+        current_user_role: workspace.current_user_role ?? workspace.pivot?.role ?? null,
         id: Number(workspace.id),
         owner_id: Number(workspace.owner_id),
     };
@@ -354,6 +356,16 @@ function handleRemoteWorkspaceAccessRemoved(payload) {
     if (wasCurrent) loadWorkspaceData().catch((error) => showMessage(elements.dashboardMessage, error.message));
 }
 
+function handleRemoteWorkspaceRoleUpdated(payload) {
+    const workspace = payload?.workspace;
+    if (!workspace || !state.user) return;
+    const current = state.workspaces.find((item) => Number(item.id) === Number(workspace.id));
+    if (!current) return;
+    current.current_user_role = payload.role;
+    renderWorkspaceOptions();
+    renderDashboard();
+}
+
 async function handleRemoteWorkspaceDeleted(payload) {
     handleRemoteWorkspaceAccessRemoved(payload);
     await confirmDialog('Il workspace è stato eliminato dal proprietario. Non è più disponibile.');
@@ -399,6 +411,7 @@ function syncRealtimeSubscriptions() {
             workspaceAvailable: handleRemoteWorkspaceAvailable,
             workspaceAccessRemoved: handleRemoteWorkspaceAccessRemoved,
             workspaceDeleted: handleRemoteWorkspaceDeleted,
+            workspaceRoleUpdated: handleRemoteWorkspaceRoleUpdated,
             pendingInvitationCreated: handleRemoteInvitationOwnerChange,
             error: (error) => console.warn('Realtime utente non disponibile.', error),
         });
@@ -432,6 +445,7 @@ function syncRealtimeSubscriptions() {
             memberJoined: handleRemoteWorkspaceMembership,
             memberRemoved: handleRemoteWorkspaceMembership,
             memberLeft: handleRemoteWorkspaceMembership,
+            memberRoleUpdated: handleRemoteWorkspaceMembership,
             activityLogged: applyRemoteWorkspaceActivity,
             error: (error) => console.warn('Realtime workspace non disponibile.', error),
         }));
@@ -587,8 +601,12 @@ function renderWorkspaceOptions() {
 
     elements.workspaceSelect.hidden = state.workspaces.length <= 1;
     const workspace = activeWorkspace();
+    document.body.classList.toggle('viewer-mode', workspace?.current_user_role === 'viewer');
     elements.manageWorkspaceButton.hidden = workspace?.type !== 'shared';
     elements.openActivityButton.hidden = !workspace;
+    const viewer = workspace?.current_user_role === 'viewer';
+    elements.newProjectButton.hidden = viewer || state.viewingArchived;
+    elements.newFolderButton.hidden = viewer || state.viewingArchived;
 }
 
 function renderFolderPath() {
@@ -784,7 +802,7 @@ function renderDashboard() {
     elements.archivedButton.hidden = state.viewingArchived;
     elements.rootButton.classList.toggle('active', !state.viewingArchived && state.currentFolderId === null);
     elements.archivedButton.classList.toggle('active', state.viewingArchived);
-    elements.newFolderButton.hidden = state.viewingArchived;
+    elements.newFolderButton.hidden = state.viewingArchived || workspace.current_user_role === 'viewer';
     elements.status.textContent = `${visible.length} ${visible.length === 1 ? 'progetto' : 'progetti'}`;
     syncQuickDropVisibility();
     refreshIcons();
@@ -1280,6 +1298,10 @@ async function loadWorkspaceManagement() {
     elements.workspaceDetailName.textContent = workspace.name;
     elements.workspaceDetailOwner.textContent = `Owner: ${workspace.owner?.name ?? workspace.owner?.email ?? '—'}`;
     elements.deleteWorkspace.hidden = workspace.type !== 'shared' || Number(workspace.owner_id) !== Number(state.user?.id);
+    elements.leaveWorkspace.hidden = Number(workspace.owner_id) === Number(state.user?.id);
+    elements.inviteForm.hidden = !['owner', 'admin'].includes(workspace.current_user_role);
+    const adminOption = elements.inviteRole?.querySelector('option[value="admin"]');
+    if (adminOption) adminOption.hidden = workspace.current_user_role !== 'owner';
     const [members, invitations] = await Promise.all([
         request(`/api/workspaces/${workspace.id}/members`),
         request(`/api/workspaces/${workspace.id}/invitations`),
@@ -1287,12 +1309,20 @@ async function loadWorkspaceManagement() {
     elements.workspaceMembers.replaceChildren();
     (members.data ?? []).forEach((member) => {
         const row = document.createElement('div');
-        row.textContent = `${member.name} — ${member.pivot?.role ?? 'member'}`;
-        if (Number(member.id) !== Number(workspace.owner_id) && Number(workspace.owner_id) === Number(state.user?.id)) {
+        const role = member.pivot?.role ?? 'member';
+        const roleLabels = { owner: 'Proprietario', admin: 'Amministratore', member: 'Membro', viewer: 'Visualizzatore' };
+        row.textContent = `${member.name} — ${roleLabels[role] ?? 'Membro'}`;
+        if (Number(member.id) !== Number(workspace.owner_id) && ['owner', 'admin'].includes(workspace.current_user_role)) {
             const remove = document.createElement('button');
             remove.className = 'btn btn-danger'; remove.textContent = 'Rimuovi';
             remove.onclick = async () => { await request(`/api/workspaces/${workspace.id}/members/${member.id}`, { method: 'DELETE' }); await loadWorkspaceManagement(); };
             row.append(' ', remove);
+            if (workspace.current_user_role === 'owner' || ['member', 'viewer'].includes(role)) {
+                const select = document.createElement('select');
+                [['admin', 'Amministratore'], ['member', 'Membro'], ['viewer', 'Visualizzatore']].forEach(([value, label]) => { const option = document.createElement('option'); option.value = value; option.textContent = label; option.selected = role === value; select.append(option); });
+                select.onchange = async () => { await request(`/api/workspaces/${workspace.id}/members/${member.id}/role`, { method: 'PATCH', body: JSON.stringify({ role: select.value }) }); await loadWorkspaceManagement(); };
+                row.append(' ', select);
+            }
         }
         elements.workspaceMembers.append(row);
     });
@@ -1408,7 +1438,7 @@ async function loadActivity(append = false) {
 }
 elements.openActivityButton.addEventListener('click', async () => { elements.activityModal.hidden = false; elements.activityModal.classList.add('open'); activityPage = 1; state.activityOpenDay = activityDayKey(new Date()); state.activityDayExpandedByUser = false; await loadActivity(); });
 elements.activityMore.addEventListener('click', async () => { activityPage += 1; await loadActivity(true); });
-elements.inviteForm.addEventListener('submit', async (event) => { event.preventDefault(); try { await request(`/api/workspaces/${state.workspaceId}/invitations`, { method: 'POST', body: JSON.stringify({ email: elements.inviteEmail.value }) }); elements.inviteForm.reset(); await loadWorkspaceManagement(); } catch (error) { showMessage(elements.dashboardMessage, error.message); } });
+elements.inviteForm.addEventListener('submit', async (event) => { event.preventDefault(); try { await request(`/api/workspaces/${state.workspaceId}/invitations`, { method: 'POST', body: JSON.stringify({ email: elements.inviteEmail.value, role: elements.inviteRole.value }) }); elements.inviteForm.reset(); await loadWorkspaceManagement(); } catch (error) { showMessage(elements.dashboardMessage, error.message); } });
 
 function renderNotifications() {
     const invitations = state.invitations;

@@ -22,7 +22,7 @@ class CreateFolder
         ?Folder $parent = null,
         ?string $color = null
     ): Folder {
-        if (! $workspace->hasMember($user)) {
+        if (! $workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
                 'workspace' => 'Non fai parte di questo workspace.',
             ]);

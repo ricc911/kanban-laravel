@@ -21,7 +21,7 @@ class CreateCategory
         string $name,
         ?string $color = null
     ): Category {
-        if (! $board->workspace->hasMember($user)) {
+        if (! $board->workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
                 'board' => 'Non hai accesso a questa board.',
             ]);

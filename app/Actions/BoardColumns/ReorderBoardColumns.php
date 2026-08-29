@@ -15,7 +15,7 @@ class ReorderBoardColumns
         Board $board,
         array $columnIds
     ): void {
-        if (! $board->workspace->hasMember($user)) {
+        if (! $board->workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
                 'board' => 'Non hai accesso a questa board.',
             ]);

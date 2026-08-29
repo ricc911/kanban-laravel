@@ -20,6 +20,7 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function (): void {
     Route::get('workspaces/{workspace}/invitations', [WorkspaceController::class, 'invitations']);
     Route::get('workspaces/{workspace}/activity', [ActivityLogController::class, 'index']);
     Route::delete('workspaces/{workspace}/members/{member}', [WorkspaceController::class, 'removeMember'])->withoutScopedBindings();
+    Route::patch('workspaces/{workspace}/members/{member}/role', [WorkspaceController::class, 'updateMemberRole'])->withoutScopedBindings();
     Route::delete('workspaces/{workspace}/leave', [WorkspaceController::class, 'leave']);
     Route::post('invitations/{token}/accept', [InvitationController::class, 'accept']);
     Route::get('invitations', [InvitationController::class, 'index']);

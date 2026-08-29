@@ -25,7 +25,7 @@ class UpdateTask
         ?Category $category = null,
         ?string $color = null
     ): Task {
-        if (! $task->board->workspace->hasMember($user)) {
+        if (! $task->board->workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
                 'task' => 'Non hai accesso a questa task.',
             ]);
