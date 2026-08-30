@@ -1662,7 +1662,11 @@ function renderNotifications() {
             const item = document.createElement('div'); item.className = `notification-item${notification.read_at ? '' : ' is-unread'}`; item.dataset.internalNotificationId = notification.id;
             const data = notification.data ?? {}; const actor = data.actor ?? {}; const actorName = [actor.name, actor.last_name].filter(Boolean).join(' ') || 'Un utente';
             const title = data.task_title ?? 'una task'; const message = document.createElement('span');
-            message.textContent = notification.type === 'task_assigned'
+            message.textContent = notification.type === 'task_due_soon'
+                ? `“${title}” scade tra meno di 24 ore.`
+                : notification.type === 'task_overdue'
+                    ? `“${title}” è scaduta.`
+                    : notification.type === 'task_assigned'
                 ? `${actorName}${actor.username ? ` (@${actor.username})` : ''} ti ha assegnato a “${title}”.`
                 : `${actorName}${actor.username ? ` (@${actor.username})` : ''} ha commentato “${title}”: ${data.comment_preview ?? ''}`;
             item.append(message); elements.notificationsList.append(item);

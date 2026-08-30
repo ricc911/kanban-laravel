@@ -6,6 +6,7 @@ use App\Actions\Activity\LogActivity;
 use App\Events\TaskUpdated;
 use App\Models\Category;
 use App\Models\Task;
+use App\Models\TaskReminderDelivery;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -79,6 +80,9 @@ class UpdateTask
                 'due_at' => $newDueAt,
                 'category_id' => $category?->id,
             ]);
+            if (array_key_exists('due_at', $changes)) {
+                TaskReminderDelivery::query()->where('task_id', $task->id)->delete();
+            }
             $freshTask = $task->fresh();
             if ($changes) {
                 $this->logger->execute($user, $board->workspace, 'task.updated', $board, $freshTask, ['task_title' => $freshTask->title, 'changes' => $changes]);

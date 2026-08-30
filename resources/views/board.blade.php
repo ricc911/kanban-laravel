@@ -43,6 +43,11 @@
                 <option value="all">Tutte</option>
                 <option value="mine">Assegnate a me</option>
             </select>
+            <select class="board-filter" id="taskDueFilter" aria-label="Filtra le task per scadenza">
+                <option value="all">Tutte le scadenze</option>
+                <option value="due_soon">In scadenza</option>
+                <option value="overdue">Scadute</option>
+            </select>
         </div>
     </header>
 
@@ -136,7 +141,7 @@
 
                 <div class="field">
                     <label for="dueAt">Scadenza</label>
-                    <input id="dueAt" type="date">
+                    <input id="dueAt" type="datetime-local">
                 </div>
 
                 <div class="field">
@@ -184,6 +189,13 @@
                     <button type="button" class="btn btn-danger" id="commentConfirmOk">Elimina</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="taskConfirmModal" hidden>
+        <div class="modal comment-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="taskConfirmTitle">
+            <div class="modal-head"><h2 id="taskConfirmTitle">Elimina task</h2><button class="close" type="button" id="taskConfirmCancel" aria-label="Chiudi">&times;</button></div>
+            <div class="modal-body"><p>Sei sicuro di voler eliminare questa task?</p><div class="modal-actions"><button type="button" class="btn" id="taskConfirmCancelButton">Annulla</button><button type="button" class="btn btn-danger" id="taskConfirmOk">Elimina</button></div></div>
         </div>
     </div>
 

@@ -28,6 +28,8 @@ const state = {
     workspaceRole: 'member',
     workspaceMembers: [],
     assignedToMeOnly: false,
+    dueFilter: 'all',
+    dueTimer: null,
     pendingTaskAssigneeIds: new Set(),
     activities: [],
     activityOpenDay: null,
@@ -42,6 +44,7 @@ const state = {
     editingCommentId: null,
     commentSubmitting: false,
     commentConfirmResolver: null,
+    taskConfirmResolver: null,
 };
 
 const elements = {
@@ -87,6 +90,10 @@ const elements = {
     commentConfirmOk: document.querySelector('#commentConfirmOk'),
     commentConfirmCancel: document.querySelector('#commentConfirmCancel'),
     commentConfirmCancelButton: document.querySelector('#commentConfirmCancelButton'),
+    taskConfirmModal: document.querySelector('#taskConfirmModal'),
+    taskConfirmOk: document.querySelector('#taskConfirmOk'),
+    taskConfirmCancel: document.querySelector('#taskConfirmCancel'),
+    taskConfirmCancelButton: document.querySelector('#taskConfirmCancelButton'),
     assignTaskMember: document.querySelector('#assignTaskMember'),
     categoryId: document.querySelector('#categoryId'),
     categoryName: document.querySelector('#categoryName'),
@@ -107,6 +114,7 @@ const elements = {
     activityModal: document.querySelector('#activityModal'),
     openActivityModal: document.querySelector('#openActivityModal'),
     taskAssignmentFilter: document.querySelector('#taskAssignmentFilter'),
+    taskDueFilter: document.querySelector('#taskDueFilter'),
     boardActivityList: document.querySelector('#boardActivityList'),
     boardPresence: document.querySelector('#boardPresence'),
     boardPresenceStatus: document.querySelector('#boardPresenceStatus'),
@@ -518,6 +526,16 @@ function applyTaskCommentsCount(taskId, count) {
     if (task) task.comments_count = Math.max(0, Number(count ?? task.comments_count ?? 0));
 }
 
+function getTaskDueState(task) {
+    if (!task?.due_at) return 'normal';
+    const due = new Date(task.due_at); if (Number.isNaN(due.getTime())) return 'normal';
+    const now = Date.now(); return due.getTime() < now ? 'overdue' : due.getTime() <= now + 86400000 ? 'due_soon' : 'normal';
+}
+
+function taskMatchesFilters(task) {
+    return state.dueFilter === 'all' || getTaskDueState(task) === state.dueFilter;
+}
+
 function commentAuthorName(author) {
     if (!author) return 'Utente eliminato';
     const name = [author.name, author.last_name].filter(Boolean).join(' ') || 'Utente';
@@ -608,6 +626,16 @@ async function deleteTaskComment(commentId) {
     if (!await confirmCommentDeletion()) return;
     try { await request(`/api/task-comments/${encodeURIComponent(commentId)}`, { method: 'DELETE' }); state.taskComments = state.taskComments.filter((comment) => String(comment.id) !== String(commentId)); const task = findTask(state.editingTaskId); applyTaskCommentsCount(state.editingTaskId, Math.max(0, (task?.comments_count ?? 1) - 1)); renderTaskComments(); renderBoard(); }
     catch (error) { elements.taskCommentsStatus.textContent = error.message; renderTaskComments(); }
+}
+
+function closeTaskConfirmation(result) {
+    elements.taskConfirmModal.hidden = true; elements.taskConfirmModal.classList.remove('open');
+    const resolve = state.taskConfirmResolver; state.taskConfirmResolver = null; resolve?.(result);
+}
+
+function confirmTaskDeletion() {
+    elements.taskConfirmModal.hidden = false; elements.taskConfirmModal.classList.add('open');
+    return new Promise((resolve) => { state.taskConfirmResolver = resolve; });
 }
 
 function closeCommentConfirmation(result) {
@@ -1193,18 +1221,22 @@ function toDateInput(value) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
 
-    return date.toISOString().slice(0, 10);
+    const pad = (part) => String(part).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function formatDate(value) {
-    const input = toDateInput(value);
-    if (!input) return '';
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
 
     return new Intl.DateTimeFormat('it-IT', {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
-    }).format(new Date(`${input}T00:00:00`));
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(date);
 }
 
 function priorityLabel(value) {
@@ -1336,6 +1368,7 @@ function renderTask(task) {
 
         if (task.priority) {
             const priority = document.createElement('span');
+            priority.className = `task-priority task-priority-${task.priority}`;
             priority.textContent = priorityLabel(task.priority);
             meta.append(priority);
         }
@@ -1347,6 +1380,13 @@ function renderTask(task) {
         }
 
         article.append(meta);
+    }
+
+    if (task.due_at) {
+        const due = document.createElement('span');
+        due.className = `task-due-badge task-due-${getTaskDueState(task)}`;
+        due.textContent = getTaskDueState(task) === 'overdue' ? 'Scaduta' : getTaskDueState(task) === 'due_soon' ? 'In scadenza' : formatDate(task.due_at);
+        article.append(due);
     }
 
     const assignees = task.assignees ?? [];
@@ -1501,9 +1541,9 @@ function renderGroup(groupKey, tasks, columnId) {
 }
 
 function renderColumn(column) {
-    const visibleTasks = state.assignedToMeOnly
+    const visibleTasks = (state.assignedToMeOnly
         ? column.tasks.filter((task) => (task.assignees ?? []).some((assignee) => String(assignee.id) === String(currentUserId())))
-        : column.tasks;
+        : column.tasks).filter(taskMatchesFilters);
     const article = document.createElement('article');
     article.className = 'column';
     article.dataset.columnId = String(column.id);
@@ -1596,6 +1636,8 @@ function renderBoard() {
 }
 
 function setError(error) {
+    window.clearInterval(state.dueTimer);
+    state.dueTimer = null;
     const messageByStatus = {
         401: 'Sessione scaduta. Effettua di nuovo l accesso.',
         403: 'Non hai accesso a questa board.',
@@ -1671,6 +1713,7 @@ function openModal(id) {
 function closeModal(id) {
     document.getElementById(id)?.classList.remove('open');
     if (id === 'commentConfirmModal' && state.commentConfirmResolver) closeCommentConfirmation(false);
+    if (id === 'taskConfirmModal' && state.taskConfirmResolver) closeTaskConfirmation(false);
     if (id === 'taskModal') clearTaskModalRealtimeState();
 }
 
@@ -2035,7 +2078,7 @@ function columnInsertionIndex(clientX) {
 }
 
 function bindDragEvents() {
-    if (state.workspaceRole === 'viewer' || state.assignedToMeOnly) return;
+    if (state.workspaceRole === 'viewer' || state.assignedToMeOnly || state.dueFilter !== 'all') return;
     document.querySelectorAll('.task').forEach((task) => {
         task.addEventListener('dragstart', (event) => {
             state.drag = {
@@ -2180,6 +2223,9 @@ elements.taskCommentSubmit.addEventListener('click', createTaskComment);
 elements.commentConfirmOk.addEventListener('click', () => closeCommentConfirmation(true));
 elements.commentConfirmCancel.addEventListener('click', () => closeCommentConfirmation(false));
 elements.commentConfirmCancelButton.addEventListener('click', () => closeCommentConfirmation(false));
+elements.taskConfirmOk.addEventListener('click', () => closeTaskConfirmation(true));
+elements.taskConfirmCancel.addEventListener('click', () => closeTaskConfirmation(false));
+elements.taskConfirmCancelButton.addEventListener('click', () => closeTaskConfirmation(false));
 
 elements.openCategoryModal.addEventListener('click', () => {
     resetCategoryForm();
@@ -2195,6 +2241,15 @@ elements.taskAssignmentFilter.addEventListener('change', (event) => {
     state.assignedToMeOnly = event.target.value === 'mine';
     renderBoard();
 });
+
+elements.taskDueFilter.addEventListener('change', (event) => {
+    state.dueFilter = event.target.value;
+    renderBoard();
+});
+
+state.dueTimer = window.setInterval(() => {
+    if (state.board && state.dueFilter !== 'all') renderBoard();
+}, 60000);
 
 document.querySelectorAll('[data-close]').forEach((button) => {
     button.addEventListener('click', () => closeModal(button.dataset.close));
@@ -2284,6 +2339,7 @@ elements.taskForm.addEventListener('submit', async (event) => {
 });
 
 elements.deleteTask.addEventListener('click', async () => {
+    if (!await confirmTaskDeletion()) return;
     try {
         await deleteCurrentTask();
         closeModal('taskModal');
