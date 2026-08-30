@@ -1475,6 +1475,13 @@
   font-weight: 800;
 }
 
+.field-stack small {
+  margin-top: -2px;
+  color: #7f91a8;
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .field-stack input {
   width: 100%;
   border: 1px solid var(--line);

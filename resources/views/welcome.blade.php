@@ -38,6 +38,13 @@
                         <label class="block text-sm font-medium">Nome
                             <input name="name" type="text" required autocomplete="name" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
                         </label>
+                        <label class="block text-sm font-medium">Cognome
+                            <input name="last_name" type="text" required autocomplete="family-name" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                        </label>
+                        <label class="block text-sm font-medium">Username
+                            <input name="username" type="text" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_-]+" autocomplete="username" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                            <span class="mt-1 block text-xs text-slate-500">3-30 caratteri: lettere, numeri, _ e -</span>
+                        </label>
                         <label class="block text-sm font-medium">Email
                             <input name="email" type="email" required autocomplete="email" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
                         </label>
@@ -72,4 +79,3 @@
         </main>
     </body>
 </html>
-

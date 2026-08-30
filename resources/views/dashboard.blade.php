@@ -54,6 +54,15 @@
                             <input type="text" name="name" autocomplete="name" required>
                         </label>
                         <label>
+                            Cognome
+                            <input type="text" name="last_name" autocomplete="family-name" required>
+                        </label>
+                        <label>
+                            Username
+                            <input type="text" name="username" minlength="3" maxlength="30" pattern="[A-Za-z0-9_-]+" autocomplete="username" required>
+                            <small>3-30 caratteri: lettere, numeri, _ e -</small>
+                        </label>
+                        <label>
                             Email
                             <input type="email" name="email" autocomplete="email" required>
                         </label>
