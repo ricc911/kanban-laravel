@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\BoardController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\FolderController;
 use App\Http\Controllers\Api\InvitationController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\TaskAssigneeController;
 use App\Http\Controllers\Api\TaskCommentController;
 use App\Http\Controllers\Api\TaskController;
@@ -28,6 +29,9 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function (): void {
     Route::delete('workspaces/{workspace}/leave', [WorkspaceController::class, 'leave']);
     Route::post('invitations/{token}/accept', [InvitationController::class, 'accept']);
     Route::get('invitations', [InvitationController::class, 'index']);
+    Route::get('notifications', [NotificationController::class, 'index']);
+    Route::patch('notifications/{notification}/read', [NotificationController::class, 'markRead']);
+    Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::delete('invitations/{invitation}', [InvitationController::class, 'reject']);
 
     Route::post('workspaces/{workspace}/folders', [FolderController::class, 'store']);

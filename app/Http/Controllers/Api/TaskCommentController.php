@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Events\TaskCommentCreated;
 use App\Events\TaskCommentDeleted;
 use App\Events\TaskCommentUpdated;
+use App\Events\UserRealtimeEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTaskCommentRequest;
 use App\Http\Requests\UpdateTaskCommentRequest;
 use App\Models\Task;
 use App\Models\TaskComment;
+use App\Notifications\TaskCommentCreatedNotification;
+use App\Support\NotificationPayload;
 use App\Support\RealtimePayload;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Broadcasting\BroadcastException;
@@ -36,6 +39,21 @@ class TaskCommentController extends Controller
         Gate::authorize('create', [TaskComment::class, $task]);
         $comment = $task->comments()->create(['user_id' => $request->user()->id, 'body' => $request->validated('body')]);
         $comment->load('author');
+        $task->load('assignees');
+        foreach ($task->assignees as $assignee) {
+            if ((int) $assignee->id === (int) $request->user()->id) {
+                continue;
+            }
+            $notification = new TaskCommentCreatedNotification($task, $comment, $request->user());
+            $notification->id = (string) str()->uuid();
+            $assignee->notify($notification);
+            $storedNotification = $assignee->notifications()->find($notification->id);
+            if ($storedNotification !== null) {
+                UserRealtimeEvent::dispatch('notification.created', (int) $assignee->id, [
+                    'notification' => NotificationPayload::database($storedNotification),
+                ]);
+            }
+        }
         $count = $task->comments()->count();
         try {
             Event::dispatch(new TaskCommentCreated($comment, (int) $task->board_id, $count));

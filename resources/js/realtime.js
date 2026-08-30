@@ -122,6 +122,7 @@ export function subscribeToUserRealtime(userId, handlers) {
                 'invitation.rejected': handlers.invitationRejected,
                 'invitation.pending.created': handlers.pendingInvitationCreated,
                 'invitation.pending.removed': handlers.pendingInvitationRemoved,
+                'notification.created': handlers.notificationCreated,
                 'workspace.created': handlers.workspaceCreated,
                 'workspace.available': handlers.workspaceAvailable,
                 'workspace.access_removed': handlers.workspaceAccessRemoved,

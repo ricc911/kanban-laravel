@@ -20,6 +20,7 @@ const state = {
     userRealtimeCleanup: null,
     workspaceRealtimeCleanups: new Map(),
     invitations: [],
+    internalNotifications: [],
     activities: [],
     activityHasMore: false,
     activityDayExpandedByUser: false,
@@ -418,6 +419,13 @@ function handleRemoteInvitationCreated(payload) {
     renderNotifications();
 }
 
+function handleRemoteNotificationCreated(payload) {
+    const notification = payload?.notification;
+    if (!notification?.id) return;
+    state.internalNotifications = [notification, ...state.internalNotifications.filter((item) => item.id !== notification.id)];
+    renderNotifications();
+}
+
 function removeInvitation(invitationId) {
     state.invitations = state.invitations.filter((item) => Number(item.id) !== Number(invitationId));
     renderNotifications();
@@ -440,6 +448,7 @@ function syncRealtimeSubscriptions() {
     if (!state.userRealtimeCleanup) {
         state.userRealtimeCleanup = subscribeToUserRealtime(state.user.id, {
             invitationCreated: handleRemoteInvitationCreated,
+            notificationCreated: handleRemoteNotificationCreated,
             invitationAccepted: (payload) => removeInvitation(payload?.invitation_id),
             invitationRejected: (payload) => removeInvitation(payload?.invitation_id),
             workspaceCreated: handleRemoteWorkspaceCreated,
@@ -1612,11 +1621,13 @@ elements.inviteForm.addEventListener('submit', async (event) => { event.preventD
 
 function renderNotifications() {
     const invitations = state.invitations;
-    elements.notificationCount.textContent = String(invitations.length);
-    elements.notificationCount.hidden = invitations.length === 0;
+    const notifications = state.internalNotifications;
+    const unreadCount = notifications.filter((item) => !item.read_at).length;
+    elements.notificationCount.textContent = String(invitations.length + unreadCount);
+    elements.notificationCount.hidden = invitations.length + unreadCount === 0;
     elements.notificationsList.replaceChildren();
 
-    if (!invitations.length) {
+    if (!invitations.length && !notifications.length) {
         elements.notificationsList.textContent = 'Nessuna notifica.';
         return;
     }
@@ -1644,11 +1655,27 @@ function renderNotifications() {
         item.append(workspace, message, expiry, actions);
         elements.notificationsList.append(item);
     });
+
+    if (notifications.length) {
+        const heading = document.createElement('h3'); heading.textContent = 'Notifiche'; elements.notificationsList.append(heading);
+        notifications.forEach((notification) => {
+            const item = document.createElement('div'); item.className = `notification-item${notification.read_at ? '' : ' is-unread'}`; item.dataset.internalNotificationId = notification.id;
+            const data = notification.data ?? {}; const actor = data.actor ?? {}; const actorName = [actor.name, actor.last_name].filter(Boolean).join(' ') || 'Un utente';
+            const title = data.task_title ?? 'una task'; const message = document.createElement('span');
+            message.textContent = notification.type === 'task_assigned'
+                ? `${actorName}${actor.username ? ` (@${actor.username})` : ''} ti ha assegnato a “${title}”.`
+                : `${actorName}${actor.username ? ` (@${actor.username})` : ''} ha commentato “${title}”: ${data.comment_preview ?? ''}`;
+            item.append(message); elements.notificationsList.append(item);
+        });
+        if (unreadCount) { const all = document.createElement('button'); all.type = 'button'; all.className = 'btn'; all.textContent = 'Segna tutte come lette'; all.dataset.markAllNotifications = ''; elements.notificationsList.append(all); }
+    }
 }
 
 async function loadInvitations() {
     const response = await request('/api/invitations');
     state.invitations = (response.data ?? []).map(normalizeInvitation);
+    const notifications = await request('/api/notifications');
+    state.internalNotifications = notifications.notifications ?? [];
     renderNotifications();
 }
 
@@ -1658,6 +1685,21 @@ elements.notificationsButton.addEventListener('click', async () => {
 });
 document.querySelector('[data-close-notifications]').addEventListener('click', () => { elements.notificationsPanel.hidden = true; });
 elements.notificationsList.addEventListener('click', async (event) => {
+    const notificationItem = event.target.closest('[data-internal-notification-id]');
+    if (notificationItem) {
+        const notification = state.internalNotifications.find((item) => item.id === notificationItem.dataset.internalNotificationId);
+        if (notification) {
+            notification.read_at = new Date().toISOString(); renderNotifications();
+            request(`/api/notifications/${encodeURIComponent(notification.id)}/read`, { method: 'PATCH' }).catch(() => {});
+            const data = notification.data ?? {};
+            window.location.assign(`/boards/${encodeURIComponent(data.board_id)}?task=${encodeURIComponent(data.task_id)}`);
+        }
+        return;
+    }
+    if (event.target.closest('[data-mark-all-notifications]')) {
+        state.internalNotifications.forEach((notification) => { if (!notification.read_at) notification.read_at = new Date().toISOString(); }); renderNotifications();
+        request('/api/notifications/read-all', { method: 'POST' }).catch(() => {}); return;
+    }
     const item = event.target.closest('[data-invitation-token]');
     if (!item) return;
     try {

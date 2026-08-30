@@ -1653,6 +1653,12 @@ async function loadBoard() {
 
         renderBoard();
         subscribeToCurrentBoard();
+        const deepLinkedTaskId = new URLSearchParams(window.location.search).get('task');
+        const deepLinkedTask = deepLinkedTaskId ? findTask(deepLinkedTaskId) : null;
+        if (deepLinkedTask) {
+            editTask(deepLinkedTask);
+            openModal('taskModal');
+        }
     } catch (error) {
         setError(error);
     }

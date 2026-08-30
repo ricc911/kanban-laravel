@@ -4,8 +4,11 @@ namespace App\Actions\Tasks;
 
 use App\Actions\Activity\LogActivity;
 use App\Events\TaskAssigneesChanged;
+use App\Events\UserRealtimeEvent;
 use App\Models\Task;
 use App\Models\User;
+use App\Notifications\TaskAssignedNotification;
+use App\Support\NotificationPayload;
 use App\Support\RealtimePayload;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -46,6 +49,18 @@ class AssignTaskMember
                 'assignee_username' => $assignee->username,
             ]);
             TaskAssigneesChanged::dispatch($task, RealtimePayload::assignees($task->assignees));
+
+            if ($actor->id !== $assignee->id) {
+                $notification = new TaskAssignedNotification($task, $actor);
+                $notification->id = (string) str()->uuid();
+                $assignee->notify($notification);
+                $storedNotification = $assignee->notifications()->find($notification->id);
+                if ($storedNotification !== null) {
+                    UserRealtimeEvent::dispatch('notification.created', (int) $assignee->id, [
+                        'notification' => NotificationPayload::database($storedNotification),
+                    ]);
+                }
+            }
         });
 
         return $task->fresh('assignees');

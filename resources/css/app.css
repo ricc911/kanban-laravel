@@ -1333,6 +1333,10 @@
     .notification-item { display: grid; gap: 9px; padding: 16px; border-bottom: 1px solid var(--line); }
     .notification-item span,
     .notification-item small { color: var(--muted); }
+    .notifications-list > h3 { margin: 18px 16px 0; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    .notification-item.is-unread { background: rgba(37, 99, 235, .12); border-left: 3px solid var(--primary); cursor: pointer; }
+    .notification-item[data-internal-notification-id] { cursor: pointer; }
+    [data-mark-all-notifications] { margin: 14px 16px; }
     .notification-actions { display: flex; gap: 8px; margin-top: 5px; }
 
     .activity-row {
