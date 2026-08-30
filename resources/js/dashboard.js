@@ -25,6 +25,7 @@ const state = {
     activityDayExpandedByUser: false,
     activityPage: 1,
     activityOpenDay: null,
+    activityStandalone: false,
     dashboardMessageTimeout: null,
 };
 
@@ -58,10 +59,14 @@ const elements = {
     notificationsPanel: document.querySelector('[data-notifications-panel]'),
     notificationsList: document.querySelector('[data-notifications-list]'),
     manageWorkspaceButton: document.querySelector('[data-manage-workspace]'),
-    openActivityButton: document.querySelector('[data-open-activity]'),
     activityModal: document.querySelector('[data-activity-modal]'),
-    activityList: document.querySelector('[data-activity-list]'),
-    activityMore: document.querySelector('[data-activity-more]'),
+    openActivityButton: document.querySelector('[data-open-activity]'),
+    activityList: document.querySelector('[data-workspace-history-content] [data-activity-list]'),
+    activityMore: document.querySelector('[data-workspace-history-content] [data-activity-more]'),
+    standaloneActivityList: document.querySelector('[data-activity-modal] [data-activity-list]'),
+    standaloneActivityMore: document.querySelector('[data-activity-modal] [data-activity-more]'),
+    workspaceHistoryToggle: document.querySelector('[data-workspace-history-toggle]'),
+    workspaceHistoryContent: document.querySelector('[data-workspace-history-content]'),
     workspaceModal: document.querySelector('[data-workspace-modal]'),
     workspaceDetailName: document.querySelector('[data-workspace-detail-name]'),
     workspaceDetailOwner: document.querySelector('[data-workspace-detail-owner]'),
@@ -316,7 +321,7 @@ function applyRemoteWorkspaceActivity(payload) {
         activity,
         ...state.activities.filter((item) => Number(item.id) !== Number(activity.id)),
     ];
-    if (!elements.activityModal.hidden) renderActivityList();
+    if (state.activityStandalone ? !elements.activityModal.hidden : (elements.workspaceHistoryContent && !elements.workspaceHistoryContent.hidden)) renderActivityList();
 }
 
 function handleRemoteWorkspaceMembership(payload) {
@@ -631,7 +636,7 @@ function renderWorkspaceOptions() {
     const workspace = activeWorkspace();
     document.body.classList.toggle('viewer-mode', workspace?.current_user_role === 'viewer');
     elements.manageWorkspaceButton.hidden = workspace?.type !== 'shared';
-    elements.openActivityButton.hidden = !workspace;
+    elements.openActivityButton.hidden = workspace?.type !== 'personal';
     const viewer = workspace?.current_user_role === 'viewer';
     elements.newProjectButton.hidden = viewer || state.viewingArchived;
     elements.newFolderButton.hidden = viewer || state.viewingArchived;
@@ -990,6 +995,7 @@ function closeModals() {
     elements.workspaceModal.hidden = true;
     elements.activityModal.classList.remove('open');
     elements.activityModal.hidden = true;
+    closeWorkspaceHistory();
     [elements.newWorkspaceModal].forEach((modal) => {
         modal.classList.remove('open');
         modal.hidden = true;
@@ -1001,7 +1007,26 @@ function closeModals() {
 function openWorkspaceModal() {
     elements.workspaceModal.hidden = false;
     elements.workspaceModal.classList.add('open');
+    state.activityStandalone = false;
+    closeWorkspaceHistory();
     refreshIcons();
+}
+
+function closeWorkspaceHistory() {
+    if (!elements.workspaceHistoryContent || !elements.workspaceHistoryToggle) return;
+    elements.workspaceHistoryContent.hidden = true;
+    elements.workspaceHistoryToggle.setAttribute('aria-expanded', 'false');
+}
+
+async function openWorkspaceHistory() {
+    if (!elements.workspaceHistoryContent || !elements.workspaceHistoryToggle) return;
+    elements.workspaceHistoryContent.hidden = false;
+    elements.workspaceHistoryToggle.setAttribute('aria-expanded', 'true');
+    activityPage = 1;
+    state.activityOpenDay = activityDayKey(new Date());
+    state.activityDayExpandedByUser = false;
+    await loadActivity();
+    elements.workspaceHistoryContent.scrollIntoView({ block: 'nearest' });
 }
 
 function confirmDialog(message, actions = ['delete']) {
@@ -1456,11 +1481,13 @@ elements.workspaceNameForm.addEventListener('submit', async (event) => {
 });
 
 function renderActivityList() {
-    elements.activityList.replaceChildren();
-    elements.activityMore.hidden = true;
+    const activityList = state.activityStandalone ? elements.standaloneActivityList : elements.activityList;
+    const activityMore = state.activityStandalone ? elements.standaloneActivityMore : elements.activityMore;
+    activityList.replaceChildren();
+    activityMore.hidden = true;
 
     if (!state.activities.length) {
-        elements.activityList.textContent = 'Nessuna attività.';
+        activityList.textContent = 'Nessuna attività.';
         return;
     }
 
@@ -1483,7 +1510,7 @@ function renderActivityList() {
             state.activityDayExpandedByUser = state.activityOpenDay !== null;
             renderActivityList();
         };
-        section.append(heading, content); elements.activityList.append(section);
+        section.append(heading, content); activityList.append(section);
         activities.forEach((activity) => {
         const row = document.createElement('div');
         row.className = 'activity-row';
@@ -1528,7 +1555,7 @@ function renderActivityList() {
         content.append(row);
         });
     });
-    elements.activityMore.hidden = !state.activityHasMore || state.activityOpenDay === null || !state.activityDayExpandedByUser;
+    activityMore.hidden = !state.activityHasMore || state.activityOpenDay === null || !state.activityDayExpandedByUser;
     refreshIcons();
 }
 
@@ -1544,10 +1571,37 @@ async function loadActivity(append = false) {
     });
     renderActivityList();
     state.activityHasMore = Boolean(response.next_page_url);
-    elements.activityMore.hidden = !state.activityHasMore || state.activityOpenDay === null || !state.activityDayExpandedByUser;
+    const activityMore = state.activityStandalone ? elements.standaloneActivityMore : elements.activityMore;
+    activityMore.hidden = !state.activityHasMore || state.activityOpenDay === null || !state.activityDayExpandedByUser;
 }
-elements.openActivityButton.addEventListener('click', async () => { elements.activityModal.hidden = false; elements.activityModal.classList.add('open'); activityPage = 1; state.activityOpenDay = activityDayKey(new Date()); state.activityDayExpandedByUser = false; await loadActivity(); });
-elements.activityMore.addEventListener('click', async () => { activityPage += 1; await loadActivity(true); });
+elements.openActivityButton.addEventListener('click', async () => {
+    state.activityStandalone = true;
+    elements.activityModal.hidden = false;
+    elements.activityModal.classList.add('open');
+    activityPage = 1;
+    state.activityOpenDay = activityDayKey(new Date());
+    state.activityDayExpandedByUser = false;
+    try {
+        await loadActivity();
+    } catch (error) {
+        closeModals();
+        showMessage(elements.dashboardMessage, error.message);
+    }
+});
+elements.workspaceHistoryToggle.addEventListener('click', async () => {
+    if (elements.workspaceHistoryContent.hidden) {
+        try {
+            await openWorkspaceHistory();
+        } catch (error) {
+            showMessage(elements.dashboardMessage, error.message);
+        }
+        return;
+    }
+    closeWorkspaceHistory();
+});
+const loadMoreActivity = async () => { activityPage += 1; await loadActivity(true); };
+elements.activityMore.addEventListener('click', loadMoreActivity);
+elements.standaloneActivityMore.addEventListener('click', loadMoreActivity);
 elements.inviteForm.addEventListener('submit', async (event) => { event.preventDefault(); try { await request(`/api/workspaces/${state.workspaceId}/invitations`, { method: 'POST', body: JSON.stringify({ email: elements.inviteEmail.value, role: elements.inviteRole.value }) }); elements.inviteForm.reset(); await loadWorkspaceManagement(); } catch (error) { showMessage(elements.dashboardMessage, error.message); } });
 
 function renderNotifications() {

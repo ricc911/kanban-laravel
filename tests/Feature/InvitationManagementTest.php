@@ -108,6 +108,38 @@ class InvitationManagementTest extends TestCase
         $this->postJson('/api/invitations/'.Str::random(64).'/accept')->assertUnauthorized();
     }
 
+    public function test_owner_can_invite_registered_user_by_case_insensitive_username(): void
+    {
+        $owner = $this->teamUser();
+        $workspace = $this->sharedWorkspace($owner);
+        User::factory()->create(['email' => 'target@example.com', 'username' => 'target_user']);
+
+        $this->actingAs($owner)
+            ->postJson("/api/workspaces/{$workspace->id}/invitations", ['email' => 'TARGET_USER'])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('workspace_invitations', [
+            'workspace_id' => $workspace->id,
+            'email' => 'target@example.com',
+        ]);
+    }
+
+    public function test_unknown_username_and_self_invite_are_rejected(): void
+    {
+        $owner = $this->teamUser();
+        $workspace = $this->sharedWorkspace($owner);
+
+        $this->actingAs($owner)
+            ->postJson("/api/workspaces/{$workspace->id}/invitations", ['email' => 'missing_user'])
+            ->assertUnprocessable()->assertJsonValidationErrors('email');
+
+        $this->actingAs($owner)
+            ->postJson("/api/workspaces/{$workspace->id}/invitations", ['email' => $owner->username])
+            ->assertUnprocessable()->assertJsonValidationErrors('email');
+
+        $this->assertDatabaseCount('workspace_invitations', 0);
+    }
+
     private function teamUser(): User
     {
         $user = User::factory()->create();

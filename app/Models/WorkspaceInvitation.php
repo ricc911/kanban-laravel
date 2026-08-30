@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class WorkspaceInvitation extends Model
 {
@@ -15,6 +17,13 @@ class WorkspaceInvitation extends Model
         'expires_at',
         'accepted_at',
     ];
+
+    protected function email(): Attribute
+    {
+        return Attribute::make(
+            set: fn (string $value): string => Str::lower(trim($value)),
+        );
+    }
 
     protected function casts(): array
     {

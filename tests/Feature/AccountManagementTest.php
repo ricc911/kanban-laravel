@@ -16,14 +16,36 @@ class AccountManagementTest extends TestCase
     {
         $user = User::factory()->create(['name' => 'Old']);
 
-        $this->actingAs($user)->patchJson('/api/account/profile', ['name' => 'New'])->assertOk()->assertJsonPath('data.name', 'New');
-        $this->assertDatabaseHas('users', ['id' => $user->id, 'name' => 'New', 'email' => $user->email]);
+        $this->actingAs($user)->patchJson('/api/account/profile', [
+            'name' => 'New',
+            'last_name' => 'Surname',
+            'username' => 'New_User',
+        ])->assertOk()->assertJsonPath('data.name', 'New')->assertJsonPath('data.username', 'new_user');
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'name' => 'New', 'last_name' => 'Surname', 'username' => 'new_user', 'email' => $user->email]);
     }
 
     public function test_guest_cannot_access_account_endpoints(): void
     {
         $this->patchJson('/api/account/profile', ['name' => 'New'])->assertUnauthorized();
         $this->patchJson('/api/account/password', [])->assertUnauthorized();
+    }
+
+    public function test_profile_rejects_another_users_username_but_accepts_own_username_case_insensitively(): void
+    {
+        $user = User::factory()->create(['username' => 'riccardo']);
+        User::factory()->create(['username' => 'marco']);
+
+        $this->actingAs($user)->patchJson('/api/account/profile', [
+            'name' => $user->name,
+            'last_name' => $user->last_name,
+            'username' => 'RICCARDO',
+        ])->assertOk()->assertJsonPath('data.username', 'riccardo');
+
+        $this->actingAs($user)->patchJson('/api/account/profile', [
+            'name' => $user->name,
+            'last_name' => $user->last_name,
+            'username' => 'MARCO',
+        ])->assertUnprocessable()->assertJsonValidationErrors('username');
     }
 
     public function test_wrong_current_password_is_rejected(): void

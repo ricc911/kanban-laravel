@@ -23,6 +23,8 @@ class AuthFlowTest extends TestCase
     {
         $response = $this->postJson('/register', [
             'name' => 'Mario Rossi',
+            'last_name' => 'Rossi',
+            'username' => 'Mario_Rossi',
             'email' => 'mario@example.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
@@ -55,7 +57,33 @@ class AuthFlowTest extends TestCase
 
         $this->getJson('/api/user')
             ->assertOk()
-            ->assertJsonPath('email', 'mario@example.com');
+            ->assertJsonPath('email', 'mario@example.com')
+            ->assertJsonPath('username', 'mario_rossi');
+    }
+
+    public function test_registration_normalizes_username_and_rejects_case_insensitive_duplicate(): void
+    {
+        $this->postJson('/register', [
+            'name' => 'Mario', 'last_name' => 'Rossi', 'username' => 'Mario_92',
+            'email' => 'mario@example.com', 'password' => 'password123', 'password_confirmation' => 'password123',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('users', ['username' => 'mario_92']);
+        $this->postJson('/logout');
+        $this->postJson('/register', [
+            'name' => 'Marco', 'last_name' => 'Bianchi', 'username' => 'MARIO_92',
+            'email' => 'marco@example.com', 'password' => 'password123', 'password_confirmation' => 'password123',
+        ])->assertUnprocessable()->assertJsonValidationErrors('username');
+    }
+
+    public function test_registration_rejects_invalid_usernames(): void
+    {
+        foreach (['ab', str_repeat('a', 31), 'has space', 'has@symbol', 'has.dot'] as $index => $username) {
+            $this->postJson('/register', [
+                'name' => 'User', 'last_name' => 'Test', 'username' => $username,
+                'email' => "invalid-{$index}@example.com", 'password' => 'password123', 'password_confirmation' => 'password123',
+            ])->assertUnprocessable()->assertJsonValidationErrors('username');
+        }
     }
 
     public function test_user_can_logout_and_login_again(): void

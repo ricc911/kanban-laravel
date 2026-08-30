@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\AcceptWorkspaceInvitationRequest;
 use App\Http\Requests\RejectWorkspaceInvitationRequest;
 use App\Http\Requests\StoreWorkspaceInvitationRequest;
+use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceInvitation;
 use Illuminate\Http\JsonResponse;
@@ -19,7 +20,7 @@ class InvitationController extends Controller
     public function index(Request $request): JsonResponse
     {
         return response()->json(['data' => WorkspaceInvitation::query()
-            ->whereRaw('LOWER(email) = ?', [strtolower($request->user()->email)])
+            ->where('email', User::normalizeEmail($request->user()->email))
             ->whereNull('accepted_at')
             ->where('expires_at', '>', now())
             ->with('workspace.owner:id,name,email')

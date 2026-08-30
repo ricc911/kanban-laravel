@@ -53,11 +53,25 @@ class InviteWorkspaceMember
             ]);
         }
 
-        $email = strtolower(trim($email));
+        $identifier = trim($email);
+        $isEmail = filter_var($identifier, FILTER_VALIDATE_EMAIL) !== false;
+        $recipient = $isEmail
+            ? User::query()->where('email', User::normalizeEmail($identifier))->first()
+            : User::query()->where('username', User::normalizeUsername($identifier))->first();
+
+        if (! $isEmail && $recipient === null) {
+            throw ValidationException::withMessages(['email' => 'Username non trovato.']);
+        }
+
+        $email = $recipient?->email ?? User::normalizeEmail($identifier);
+
+        if ($recipient?->is($actor)) {
+            throw ValidationException::withMessages(['email' => 'Non puoi invitare te stesso.']);
+        }
 
         if (
             $workspace->members()
-                ->where('email', $email)
+                ->whereRaw('LOWER(users.email) = ?', [$email])
                 ->exists()
         ) {
             throw ValidationException::withMessages([
@@ -80,9 +94,7 @@ class InviteWorkspaceMember
         $this->logger->execute($actor, $workspace, 'workspace.member_invited', null, $invitation, ['email' => $email]);
 
         $invitation->loadMissing(['workspace.owner:id,name', 'workspace:id,name,owner_id,type']);
-        $recipient = User::query()
-            ->whereRaw('LOWER(email) = ?', [$email])
-            ->first();
+        $recipient ??= User::query()->where('email', $email)->first();
 
         if ($recipient !== null) {
             UserRealtimeEvent::dispatch('invitation.created', (int) $recipient->id, [

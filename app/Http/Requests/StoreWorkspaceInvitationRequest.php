@@ -22,9 +22,19 @@ class StoreWorkspaceInvitationRequest extends FormRequest
      */
     public function rules(): array
     {
+        $identifier = trim((string) $this->input('email'));
+        $isEmail = filter_var($identifier, FILTER_VALIDATE_EMAIL) !== false;
+
         return [
-            'email' => ['required', 'email', 'max:255'],
+            'email' => $isEmail
+                ? ['required', 'email', 'max:255']
+                : ['required', 'string', 'regex:/\A[a-zA-Z0-9_-]{3,30}\z/'],
             'role' => ['nullable', 'in:admin,member,viewer'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge(['email' => trim((string) $this->input('email'))]);
     }
 }

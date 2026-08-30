@@ -36,7 +36,7 @@ class AcceptWorkspaceInvitation
             ]);
         }
 
-        if (strtolower($user->email) !== strtolower($invitation->email)) {
+        if (User::normalizeEmail($user->email) !== User::normalizeEmail($invitation->email)) {
             throw ValidationException::withMessages([
                 'invitation' => 'Questo invito appartiene a un altro utente.',
             ]);

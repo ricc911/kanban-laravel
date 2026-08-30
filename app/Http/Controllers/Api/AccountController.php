@@ -13,7 +13,12 @@ class AccountController extends Controller
 {
     public function updateProfile(UpdateProfileRequest $request, UpdateProfile $action): JsonResponse
     {
-        return response()->json(['data' => $action->execute($request->user(), $request->validated('name'))]);
+        return response()->json(['data' => $action->execute(
+            $request->user(),
+            $request->validated('name'),
+            $request->validated('last_name'),
+            $request->validated('username'),
+        )]);
     }
 
     public function updatePassword(UpdatePasswordRequest $request, UpdatePassword $action): JsonResponse

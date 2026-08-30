@@ -156,8 +156,8 @@
                         </div>
                     </div>
                     <div class="workspace-actions">
-                        <button class="btn with-icon" type="button" data-manage-workspace hidden>Gestisci workspace</button>
                         <button class="btn with-icon" type="button" data-open-activity hidden>Cronologia</button>
+                        <button class="btn with-icon" type="button" data-manage-workspace hidden>Gestisci workspace</button>
                         <button class="btn with-icon" type="button" data-new-folder>
                             <i class="icon" data-lucide="folder-plus"></i>
                             Nuova cartella
@@ -202,6 +202,15 @@
                     </section>
                     <section class="workspace-panel workspace-section"><div class="workspace-panel-heading"><h3>Inviti pendenti</h3><span>In attesa di risposta</span></div><div data-pending-invitations></div></section>
                     <section class="workspace-panel workspace-section"><div class="workspace-panel-heading"><h3>Membri</h3><span>Persone con accesso</span></div><div data-workspace-members></div></section>
+                    <section class="workspace-panel workspace-section workspace-history-panel">
+                        <button class="workspace-history-toggle" type="button" aria-expanded="false" aria-controls="workspace-history-content" data-workspace-history-toggle>
+                            <span class="workspace-history-toggle-label"><span class="workspace-panel-eyebrow">Attività</span><strong>Cronologia</strong></span>
+                            <i class="icon workspace-history-toggle-icon" data-lucide="chevron-right"></i>
+                        </button>
+                        <div id="workspace-history-content" class="workspace-history-content" data-workspace-history-content hidden>
+                            <div class="activity-panel"><div class="activity-panel-heading"><h3>Attività recenti</h3><span>Modifiche del workspace</span></div><div data-activity-list></div><button class="btn" type="button" data-activity-more hidden>Carica altre</button></div>
+                        </div>
+                    </section>
                     <div class="workspace-danger-zone"><div><strong>Azioni workspace</strong><span>Le modifiche possono influire su tutti i membri</span></div><div class="modal-actions"><button class="btn warning-solid" type="button" data-leave-workspace>Lascia workspace</button><button class="btn danger-solid" type="button" data-delete-workspace hidden>Elimina workspace</button></div></div>
                 </div>
             </div>
