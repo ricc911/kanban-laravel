@@ -90,10 +90,16 @@ class InviteWorkspaceMember
             ]);
         }
 
-        UserRealtimeEvent::dispatch('invitation.pending.created', (int) $actor->id, [
-            'workspace_id' => (int) $workspace->id,
-            'invitation_id' => (int) $invitation->id,
-        ]);
+        $managerIds = $workspace->members()
+            ->wherePivotIn('role', ['owner', 'admin'])
+            ->pluck('users.id');
+
+        foreach ($managerIds as $managerId) {
+            UserRealtimeEvent::dispatch('invitation.pending.created', (int) $managerId, [
+                'workspace_id' => (int) $workspace->id,
+                'invitation_id' => (int) $invitation->id,
+            ]);
+        }
 
         return $invitation;
     }

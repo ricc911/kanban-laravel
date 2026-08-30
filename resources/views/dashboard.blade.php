@@ -188,13 +188,14 @@
                 <div class="modal-body">
                     <section class="workspace-info-card">
                         <span class="workspace-panel-eyebrow">Workspace condiviso</span>
-                        <strong data-workspace-detail-name></strong>
+                        <div class="workspace-info-title"><strong data-workspace-detail-name></strong><button class="icon-button" type="button" data-edit-workspace title="Modifica nome workspace" aria-label="Modifica nome workspace"><i class="icon" data-lucide="pencil"></i></button></div>
+                        <form class="workspace-name-edit" data-workspace-name-form hidden><input type="text" maxlength="255" required data-workspace-name-input><button class="btn btn-primary" type="submit">Salva</button><button class="btn" type="button" data-cancel-workspace-name>Annulla</button></form>
                         <span data-workspace-detail-owner></span>
                     </section>
                     <section class="workspace-panel workspace-invite-panel">
                         <div class="workspace-panel-heading"><h3>Invita membro</h3><span>Collabora con il tuo team</span></div>
                         <form class="workspace-invite-form" data-invite-form>
-                        <div class="field"><label for="inviteEmail">Invita membro</label><input id="inviteEmail" type="email" required placeholder="email@esempio.it" data-invite-email></div>
+                        <div class="field"><label for="inviteEmail">Email del membro</label><input id="inviteEmail" type="email" required placeholder="email@esempio.it" data-invite-email></div>
                         <div class="field"><label for="inviteRole">Ruolo</label><select id="inviteRole" data-invite-role><option value="member">Membro</option><option value="viewer">Visualizzatore</option><option value="admin">Amministratore</option></select></div>
                         <button class="btn btn-primary" type="submit">Invia invito</button>
                         </form>

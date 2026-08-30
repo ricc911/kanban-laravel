@@ -16,9 +16,9 @@ class RejectWorkspaceInvitation
     public function execute(User $user, WorkspaceInvitation $invitation): void
     {
         $isRecipient = strtolower($invitation->email) === strtolower($user->email);
-        $isOwner = (int) $invitation->workspace->owner_id === (int) $user->id;
+        $isManager = $invitation->workspace->canManageMembers($user);
 
-        if (! $isRecipient && ! $isOwner) {
+        if (! $isRecipient && ! $isManager) {
             throw ValidationException::withMessages(['invitation' => 'Questo invito non è destinato a te.']);
         }
 
@@ -28,15 +28,24 @@ class RejectWorkspaceInvitation
             $invitationId = (int) $invitation->id;
             $email = $invitation->email;
             $invitation->delete();
-            if (! $isRecipient) {
-                return;
+            if ($isRecipient) {
+                $this->logger->execute($user, $workspace, 'workspace.invitation_rejected', null, null, ['email' => $email]);
+                UserRealtimeEvent::dispatch('invitation.rejected', $ownerId, [
+                    'workspace_id' => (int) $workspace->id,
+                    'invitation_id' => $invitationId,
+                ]);
             }
 
-            $this->logger->execute($user, $workspace, 'workspace.invitation_rejected', null, null, ['email' => $email]);
-            UserRealtimeEvent::dispatch('invitation.rejected', $ownerId, [
-                'workspace_id' => (int) $workspace->id,
-                'invitation_id' => $invitationId,
-            ]);
+            $managerIds = $workspace->members()
+                ->wherePivotIn('role', ['owner', 'admin'])
+                ->pluck('users.id');
+
+            foreach ($managerIds as $managerId) {
+                UserRealtimeEvent::dispatch('invitation.pending.removed', (int) $managerId, [
+                    'workspace_id' => (int) $workspace->id,
+                    'invitation_id' => $invitationId,
+                ]);
+            }
         });
     }
 }

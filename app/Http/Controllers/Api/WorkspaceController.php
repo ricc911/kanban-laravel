@@ -6,12 +6,14 @@ use App\Actions\Workspaces\CreateSharedWorkspace;
 use App\Actions\Workspaces\DeleteWorkspace;
 use App\Actions\Workspaces\LeaveWorkspace;
 use App\Actions\Workspaces\RemoveWorkspaceMember;
+use App\Actions\Workspaces\UpdateWorkspace;
 use App\Actions\Workspaces\UpdateWorkspaceMemberRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LeaveWorkspaceRequest;
 use App\Http\Requests\RemoveWorkspaceMemberRequest;
 use App\Http\Requests\StoreSharedWorkspaceRequest;
 use App\Http\Requests\UpdateWorkspaceMemberRoleRequest;
+use App\Http\Requests\UpdateWorkspaceRequest;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Http\JsonResponse;
@@ -30,6 +32,11 @@ class WorkspaceController extends Controller
     public function store(StoreSharedWorkspaceRequest $request, CreateSharedWorkspace $action): JsonResponse
     {
         return response()->json(['data' => $action->execute($request->user(), $request->validated('name'))], 201);
+    }
+
+    public function update(UpdateWorkspaceRequest $request, Workspace $workspace, UpdateWorkspace $action): JsonResponse
+    {
+        return response()->json(['data' => $action->execute($request->user(), $workspace, $request->validated('name'))]);
     }
 
     public function index(Request $request): JsonResponse
