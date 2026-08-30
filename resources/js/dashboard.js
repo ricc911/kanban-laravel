@@ -398,9 +398,9 @@ function handleRemoteWorkspaceRoleUpdated(payload) {
     }
 }
 
-async function handleRemoteWorkspaceDeleted(payload) {
+function handleRemoteWorkspaceDeleted(payload) {
     handleRemoteWorkspaceAccessRemoved(payload);
-    await confirmDialog('Il workspace è stato eliminato dal proprietario. Non è più disponibile.');
+    showMessage(elements.dashboardMessage, 'Il workspace è stato eliminato dal proprietario. Non è più disponibile.', true);
 }
 
 function handleRemoteInvitationCreated(payload) {

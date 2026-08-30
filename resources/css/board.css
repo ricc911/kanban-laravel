@@ -1303,6 +1303,25 @@
     width: .9rem;
 }
 
+@media (max-width: 768px) {
+  .modal-backdrop {
+    align-items: start;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+
+  .modal {
+    max-height: calc(100dvh - 16px);
+    min-height: 0;
+  }
+
+  .modal-body {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}
+
 @media (max-width: 480px) {
     .task-comment-body {
         margin-left: 0;
