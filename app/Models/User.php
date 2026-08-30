@@ -84,6 +84,11 @@ class User extends Authenticatable
         return $this->hasMany(ActivityLog::class, 'actor_id');
     }
 
+    public function assignedTasks(): BelongsToMany
+    {
+        return $this->belongsToMany(Task::class, 'task_assignees')->withTimestamps();
+    }
+
     public function isMemberOf(Workspace $workspace): bool
     {
         return $workspace->hasMember($this);

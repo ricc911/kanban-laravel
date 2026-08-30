@@ -3,8 +3,10 @@
 namespace App\Actions\Workspaces;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\TaskAssigneesChanged;
 use App\Events\UserRealtimeEvent;
 use App\Events\WorkspaceChanged;
+use App\Models\Task;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Support\RealtimePayload;
@@ -27,6 +29,16 @@ class LeaveWorkspace
             throw ValidationException::withMessages(['workspace' => 'Non fai parte di questo workspace.']);
         }
         DB::transaction(function () use ($user, $workspace): void {
+            $assignedTasks = Task::query()
+                ->whereHas('board', fn ($query) => $query->where('workspace_id', $workspace->id))
+                ->whereHas('assignees', fn ($query) => $query->whereKey($user->id))
+                ->with('assignees')
+                ->get();
+            foreach ($assignedTasks as $task) {
+                $task->assignees()->detach($user->id);
+                $task->unsetRelation('assignees')->load('assignees');
+                TaskAssigneesChanged::dispatch($task, RealtimePayload::assignees($task->assignees));
+            }
             $this->logger->execute($user, $workspace, 'workspace.member_left', null, null, ['member_name' => $user->name]);
             $workspace->members()->detach($user->id);
             WorkspaceChanged::dispatch('workspace.member_left', (int) $workspace->id, [

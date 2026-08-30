@@ -62,6 +62,7 @@ class CreateTask
                 'due_at' => $dueAt,
                 'position' => $position,
             ]);
+            $task->load('assignees');
             $this->logger->execute($user, $board->workspace, 'task.created', $board, $task, ['task_title' => $task->title]);
 
             return $task;

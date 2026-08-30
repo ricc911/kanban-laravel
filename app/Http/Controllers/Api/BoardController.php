@@ -16,6 +16,7 @@ use App\Http\Requests\UpdateBoardRequest;
 use App\Models\Board;
 use App\Models\Folder;
 use App\Models\Workspace;
+use App\Support\RealtimePayload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -85,12 +86,25 @@ class BoardController extends Controller
                 ->with([
                     'tasks' => fn ($query) => $query
                         ->where('archived', false)
+                        ->with('assignees')
                         ->orderBy('position'),
                 ]),
             'categories' => fn ($query) => $query
                 ->orderBy('position'),
             'folder:id,name',
         ]);
+
+        $workspaceMembers = $board->workspace->members()->get();
+
+        $board->columns->each(function ($column): void {
+            $column->tasks->each(function ($task): void {
+                $task->setRelation('assignees', $task->assignees->map(fn ($user): array => RealtimePayload::assignee($user)));
+            });
+        });
+        $board->workspace->unsetRelation('members');
+        $board->setRelation('workspace_members', $workspaceMembers->map(function ($member): array {
+            return RealtimePayload::member($member, $member->pivot?->role);
+        }));
 
         return response()->json([
             'data' => $board,

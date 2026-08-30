@@ -39,6 +39,10 @@
             <button class="btn btn-category" type="button" id="openCategoryModal">+ Categoria</button>
             <button class="btn btn-primary" type="button" id="openTaskModal">+ Evento</button>
             <button class="btn" type="button" id="openActivityModal">Cronologia</button>
+            <select class="board-filter" id="taskAssignmentFilter" aria-label="Filtra le task per assegnatario">
+                <option value="all">Tutte</option>
+                <option value="mine">Assegnate a me</option>
+            </select>
         </div>
     </header>
 
@@ -96,6 +100,15 @@
                     <label for="category">Categoria</label>
                     <select id="category"></select>
                     <p class="hint">Puoi creare nuove categorie dal pulsante &ldquo;+ Categoria&rdquo;.</p>
+                </div>
+
+                <div class="field task-assignees-field">
+                    <label>Assegnatari</label>
+                    <div id="taskAssigneeList" class="task-assignee-list"></div>
+                    <div id="taskAssigneeControls" class="task-assignee-controls" hidden>
+                        <select id="taskAssigneeSelect" aria-label="Seleziona assegnatario"></select>
+                        <button type="button" class="btn" id="assignTaskMember">Assegna</button>
+                    </div>
                 </div>
 
                 <div class="field">

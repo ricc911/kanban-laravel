@@ -9,6 +9,12 @@ function location(metadata, prefix) {
     return ` da ${quoted(from ?? 'Root')} → ${quoted(to ?? 'Root')}`;
 }
 
+function assigneeLabel(metadata) {
+    const name = [metadata.assignee_name, metadata.assignee_last_name].filter(Boolean).join(' ') || 'un utente';
+
+    return metadata.assignee_username ? `${name} (@${metadata.assignee_username})` : name;
+}
+
 export function formatActivity(activity) {
     const metadata = activity.metadata ?? {};
     const name = metadata.task_title ?? metadata.category_name ?? metadata.column_name ?? metadata.board_name ?? metadata.folder_name ?? '';
@@ -17,6 +23,8 @@ export function formatActivity(activity) {
         'task.updated': `ha modificato ${quoted(name)}`,
         'task.moved': `ha spostato ${quoted(name)} da ${quoted(metadata.from_column_name ?? 'Root')} → ${quoted(metadata.to_column_name ?? 'Root')}`,
         'task.deleted': `ha eliminato ${quoted(name)}`,
+        'task.assignee_added': `ha assegnato ${assigneeLabel(metadata)} alla task ${quoted(name)}`,
+        'task.assignee_removed': `ha rimosso ${assigneeLabel(metadata)} dalla task ${quoted(name)}`,
         'category.created': `ha creato la categoria ${quoted(name)}`,
         'category.updated': `ha modificato la categoria ${quoted(name)}`,
         'category.deleted': `ha eliminato la categoria ${quoted(name)}`,

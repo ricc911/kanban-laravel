@@ -3,8 +3,10 @@
 namespace App\Actions\Workspaces;
 
 use App\Actions\Activity\LogActivity;
+use App\Events\TaskAssigneesChanged;
 use App\Events\UserRealtimeEvent;
 use App\Events\WorkspaceChanged;
+use App\Models\Task;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Support\RealtimePayload;
@@ -31,6 +33,16 @@ class RemoveWorkspaceMember
             ]);
         }
         DB::transaction(function () use ($actor, $workspace, $member): void {
+            $assignedTasks = Task::query()
+                ->whereHas('board', fn ($query) => $query->where('workspace_id', $workspace->id))
+                ->whereHas('assignees', fn ($query) => $query->whereKey($member->id))
+                ->with('assignees')
+                ->get();
+            foreach ($assignedTasks as $task) {
+                $task->assignees()->detach($member->id);
+                $task->unsetRelation('assignees')->load('assignees');
+                TaskAssigneesChanged::dispatch($task, RealtimePayload::assignees($task->assignees));
+            }
             $this->logger->execute($actor, $workspace, 'workspace.member_removed', null, null, ['member_name' => $member->name]);
             $workspace->members()->detach($member->id);
             WorkspaceChanged::dispatch('workspace.member_removed', (int) $workspace->id, [

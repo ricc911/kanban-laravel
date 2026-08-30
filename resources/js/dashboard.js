@@ -374,7 +374,9 @@ function handleRemoteWorkspaceAccessRemoved(payload) {
     state.workspaceRealtimeCleanups.delete(workspaceId);
 
     if (wasCurrent) {
-        state.workspaceId = state.workspaces[0]?.id ?? null;
+        const personalWorkspace = state.workspaces.find((workspace) => workspace.type === 'personal');
+        state.workspaceId = personalWorkspace?.id ?? state.workspaces[0]?.id ?? null;
+        if (state.workspaceId) localStorage.setItem(STORAGE_WORKSPACE_KEY, String(state.workspaceId));
         state.currentFolderId = null;
         state.viewingArchived = false;
     }

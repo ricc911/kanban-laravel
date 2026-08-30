@@ -26,6 +26,9 @@ const state = {
     taskModalDeleted: false,
     boardDeleted: false,
     workspaceRole: 'member',
+    workspaceMembers: [],
+    assignedToMeOnly: false,
+    pendingTaskAssigneeIds: new Set(),
     activities: [],
     activityOpenDay: null,
     editingSessionId: null,
@@ -65,6 +68,10 @@ const elements = {
     taskEditingIndicator: document.querySelector('#taskEditingIndicator'),
     deleteTask: document.querySelector('#deleteTask'),
     taskRealtimeStatus: null,
+    taskAssigneeList: document.querySelector('#taskAssigneeList'),
+    taskAssigneeControls: document.querySelector('#taskAssigneeControls'),
+    taskAssigneeSelect: document.querySelector('#taskAssigneeSelect'),
+    assignTaskMember: document.querySelector('#assignTaskMember'),
     categoryId: document.querySelector('#categoryId'),
     categoryName: document.querySelector('#categoryName'),
     categoryColor: document.querySelector('#categoryColor'),
@@ -83,6 +90,7 @@ const elements = {
     backToProjects: document.querySelector('[data-back-to-projects]'),
     activityModal: document.querySelector('#activityModal'),
     openActivityModal: document.querySelector('#openActivityModal'),
+    taskAssignmentFilter: document.querySelector('#taskAssignmentFilter'),
     boardActivityList: document.querySelector('#boardActivityList'),
     boardPresence: document.querySelector('#boardPresence'),
     boardPresenceStatus: document.querySelector('#boardPresenceStatus'),
@@ -100,6 +108,31 @@ function boardId() {
 
 function currentUserId() {
     return document.body.dataset.userId;
+}
+
+function normalizeAssignee(user) {
+    return {
+        id: String(user.id),
+        name: user.name ?? 'Utente',
+        last_name: user.last_name ?? '',
+        username: user.username ?? '',
+    };
+}
+
+function assigneeName(user, includeUsername = true) {
+    const name = [user.name, user.last_name].filter(Boolean).join(' ') || 'Utente';
+
+    return includeUsername && user.username ? `${name} (@${user.username})` : name;
+}
+
+function userInitials(user) {
+    return [user.name, user.last_name]
+        .filter(Boolean)
+        .map((part) => part.trim()[0])
+        .filter(Boolean)
+        .slice(0, 2)
+        .join('')
+        .toUpperCase() || '?';
 }
 
 function newEditingSessionId() {
@@ -459,6 +492,7 @@ function normalizeTask(task) {
         priority: task.priority ?? '',
         due_at: task.due_at ?? null,
         position: Number(task.position ?? 0),
+        assignees: Array.isArray(task.assignees) ? task.assignees.map(normalizeAssignee) : undefined,
     };
 }
 
@@ -497,7 +531,9 @@ function removeTaskFromState(taskId) {
 }
 
 function upsertTaskInState(task) {
+    const current = findTask(task.id);
     const normalized = normalizeTask(task);
+    if (normalized.assignees === undefined) normalized.assignees = current?.assignees ?? [];
     removeTaskFromState(normalized.id);
 
     if (normalized.archived) {
@@ -731,6 +767,12 @@ function applyRemoteTaskUpdated(payload) {
     renderAfterRealtimeUpdate();
 }
 
+function applyRemoteTaskAssigneesChanged(payload) {
+    if (Number(payload?.board_id) !== Number(boardId()) || !Array.isArray(payload?.assignees)) return;
+
+    applyTaskAssignees(payload.task_id, payload.assignees);
+}
+
 function applyRemoteTaskMoved(payload) {
     if (Number(payload?.task?.board_id) !== Number(boardId())) return;
 
@@ -862,9 +904,22 @@ function applyRemoteActivity(payload) {
     if (elements.activityModal.classList.contains('open')) renderBoardActivityList();
 }
 
-function handleRemoteBoardAccessRemoved(payload) {
+function redirectToPersonalWorkspace() {
+    request('/api/workspaces')
+        .then((response) => {
+            const personalWorkspace = (response.data ?? []).find((workspace) => workspace.type === 'personal');
+            const destination = personalWorkspace?.id
+                ? `/?workspace_id=${encodeURIComponent(personalWorkspace.id)}`
+                : '/';
+            window.location.assign(destination);
+        })
+        .catch(() => window.location.assign('/'));
+}
+
+function handleRemoteBoardAccessRemoved(payload, redirect = false) {
     if (!state.board || Number(state.board.workspace_id) !== Number(payload?.workspace?.id ?? payload?.workspace_id)) return;
 
+    if (redirect) redirectToPersonalWorkspace();
     stopTaskEditing();
     state.remoteTaskEditors.clear();
     state.board = null;
@@ -909,6 +964,7 @@ function subscribeToCurrentBoard() {
         moved: applyRemoteTaskMoved,
         deleted: applyRemoteTaskDeleted,
         editingStateChanged: applyRemoteTaskEditingState,
+        assigneesChanged: applyRemoteTaskAssigneesChanged,
         reordered: applyRemoteTasksReordered,
         boardUpdated: applyRemoteBoardChanged,
         boardArchived: applyRemoteBoardChanged,
@@ -931,7 +987,7 @@ function subscribeToCurrentBoard() {
         error: setPresenceOffline,
     });
     state.userRealtimeCleanup = subscribeToUserRealtime(currentUserId(), {
-        workspaceAccessRemoved: handleRemoteBoardAccessRemoved,
+        workspaceAccessRemoved: (payload) => handleRemoteBoardAccessRemoved(payload, true),
         workspaceRoleUpdated: handleRemoteBoardRoleUpdated,
         workspaceDeleted: handleRemoteBoardDeleted,
         error: (error) => console.warn('Realtime utente non disponibile.', error),
@@ -1126,7 +1182,97 @@ function renderTask(task) {
         article.append(meta);
     }
 
+    const assignees = task.assignees ?? [];
+    if (assignees.length) {
+        const assigneeBadges = document.createElement('div');
+        assigneeBadges.className = 'task-assignee-badges';
+        assignees.slice(0, 3).forEach((assignee) => {
+            const badge = document.createElement('span');
+            badge.className = 'task-assignee-avatar';
+            badge.textContent = userInitials(assignee);
+            badge.title = assigneeName(assignee);
+            badge.setAttribute('aria-label', assigneeName(assignee));
+            assigneeBadges.append(badge);
+        });
+        if (assignees.length > 3) {
+            const more = document.createElement('span');
+            more.className = 'task-assignee-avatar task-assignee-more';
+            more.textContent = `+${assignees.length - 3}`;
+            more.title = `${assignees.length} assegnatari`;
+            assigneeBadges.append(more);
+        }
+        article.append(assigneeBadges);
+    }
+
     return article;
+}
+
+function renderTaskAssignees(task) {
+    const list = elements.taskAssigneeList;
+    const controls = elements.taskAssigneeControls;
+    const select = elements.taskAssigneeSelect;
+    if (!list || !controls || !select) return;
+
+    const assigned = task?.assignees ?? [...state.pendingTaskAssigneeIds]
+        .map((id) => state.workspaceMembers.find((member) => String(member.id) === String(id)))
+        .filter(Boolean);
+
+    list.replaceChildren();
+    assigned.forEach((assignee) => {
+        const row = document.createElement('div');
+        row.className = 'task-assignee-row';
+        const identity = document.createElement('span');
+        identity.textContent = assigneeName(assignee);
+        row.append(identity);
+        if (state.workspaceRole !== 'viewer') {
+            const remove = document.createElement('button');
+            remove.className = 'task-assignee-remove';
+            remove.type = 'button';
+            remove.textContent = 'Rimuovi';
+            remove.setAttribute('aria-label', `Rimuovi ${assigneeName(assignee, false)} dagli assegnatari`);
+            remove.onclick = async () => {
+                if (!task?.id) {
+                    state.pendingTaskAssigneeIds.delete(String(assignee.id));
+                    renderTaskAssignees(null);
+                    return;
+                }
+                try {
+                    await updateTaskAssignee(task.id, assignee.id, false);
+                } catch (error) {
+                    setStatus(error.message, true);
+                }
+            };
+            row.append(remove);
+        }
+        list.append(row);
+    });
+
+    select.replaceChildren();
+    const available = state.workspaceMembers.filter((member) => !assigned.some((assignee) => String(assignee.id) === String(member.id)));
+    available.forEach((member) => {
+        const option = document.createElement('option');
+        option.value = member.id;
+        option.textContent = assigneeName(member);
+        select.append(option);
+    });
+    controls.hidden = state.workspaceRole === 'viewer' || available.length === 0;
+}
+
+async function updateTaskAssignee(taskId, userId, active) {
+    const url = `/api/tasks/${encodeURIComponent(taskId)}/assignees${active ? '' : `/${encodeURIComponent(userId)}`}`;
+    const response = await request(url, {
+        method: active ? 'POST' : 'DELETE',
+        ...(active ? { body: JSON.stringify({ user_id: Number(userId) }) } : {}),
+    });
+    applyTaskAssignees(taskId, response.data?.assignees ?? []);
+}
+
+function applyTaskAssignees(taskId, assignees) {
+    const task = findTask(taskId);
+    if (!task) return;
+    task.assignees = assignees.map(normalizeAssignee);
+    if (state.editingTaskId === String(taskId)) renderTaskAssignees(task);
+    renderBoard();
 }
 
 function renderGroup(groupKey, tasks, columnId) {
@@ -1179,6 +1325,9 @@ function renderGroup(groupKey, tasks, columnId) {
 }
 
 function renderColumn(column) {
+    const visibleTasks = state.assignedToMeOnly
+        ? column.tasks.filter((task) => (task.assignees ?? []).some((assignee) => String(assignee.id) === String(currentUserId())))
+        : column.tasks;
     const article = document.createElement('article');
     article.className = 'column';
     article.dataset.columnId = String(column.id);
@@ -1196,7 +1345,7 @@ function renderColumn(column) {
 
     const count = document.createElement('span');
     count.className = 'count';
-    count.textContent = String(column.tasks.length);
+    count.textContent = String(visibleTasks.length);
 
     const actions = document.createElement('div');
     actions.className = 'column-actions';
@@ -1220,20 +1369,20 @@ function renderColumn(column) {
     dropzone.className = 'dropzone';
     dropzone.dataset.columnId = String(column.id);
 
-    if (column.tasks.length === 0) {
+    if (visibleTasks.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'empty';
         empty.textContent = 'Trascina qui un evento o una categoria';
         dropzone.append(empty);
     } else {
-        const groupKeys = [...new Set(column.tasks.map(taskGroupKey))];
+        const groupKeys = [...new Set(visibleTasks.map(taskGroupKey))];
         const orderedKeys = [
             ...state.categories.map((category) => category.id).filter((id) => groupKeys.includes(id)),
             ...(groupKeys.includes(UNCATEGORIZED) ? [UNCATEGORIZED] : []),
         ];
 
         orderedKeys.forEach((key) => {
-            const tasks = column.tasks.filter((task) => taskGroupKey(task) === key);
+            const tasks = visibleTasks.filter((task) => taskGroupKey(task) === key);
             if (tasks.length > 0) dropzone.append(renderGroup(key, tasks, column.id));
         });
     }
@@ -1262,6 +1411,7 @@ function renderBoard() {
     elements.boardColumns.replaceChildren();
     elements.boardColumns.style.setProperty('--board-column-count', String(Math.min(6, Math.max(1, state.columns.length))));
     state.columns.forEach((column) => elements.boardColumns.append(renderColumn(column)));
+    renderTaskAssignees(state.editingTaskId ? findTask(state.editingTaskId) : null);
     renderCategorySelect();
     renderCategoryList();
     setStatus('Salvato');
@@ -1314,6 +1464,10 @@ async function loadBoard() {
             Number(workspace.id) === Number(board.workspace_id) && workspace.type === 'shared'
         ));
         state.boardDeleted = false;
+        state.workspaceMembers = (board.workspace_members ?? []).map((member) => ({
+            ...normalizeAssignee(member),
+            role: member.role ?? 'member',
+        }));
         state.categories = (board.categories ?? [])
             .map(normalizeCategory)
             .sort((left, right) => left.position - right.position);
@@ -1350,6 +1504,7 @@ function setTaskColor(value) {
 
 function resetTaskForm() {
     clearTaskModalRealtimeState();
+    state.pendingTaskAssigneeIds.clear();
     elements.taskForm.reset();
     elements.taskId.value = '';
     elements.taskModalTitle.textContent = 'Nuovo evento';
@@ -1357,6 +1512,7 @@ function resetTaskForm() {
     setTaskColor(DEFAULT_TASK_COLOR);
     elements.categorySelect.value = '';
     elements.taskForm.dataset.columnId = state.columns[0]?.id ?? '';
+    renderTaskAssignees(null);
 }
 
 function editTask(task) {
@@ -1373,6 +1529,7 @@ function editTask(task) {
     elements.taskModalTitle.textContent = 'Modifica evento';
     elements.deleteTask.style.display = 'inline-flex';
     startTaskEditing(task.id);
+    renderTaskAssignees(task);
     renderTaskModalRealtimeState();
 }
 
@@ -1456,6 +1613,10 @@ async function saveTask() {
     });
     const created = normalizeTask(response.data);
     upsertTaskInState(created);
+    for (const userId of state.pendingTaskAssigneeIds) {
+        await updateTaskAssignee(created.id, userId, true);
+    }
+    state.pendingTaskAssigneeIds.clear();
 }
 
 async function deleteCurrentTask() {
@@ -1690,7 +1851,7 @@ function columnInsertionIndex(clientX) {
 }
 
 function bindDragEvents() {
-    if (state.workspaceRole === 'viewer') return;
+    if (state.workspaceRole === 'viewer' || state.assignedToMeOnly) return;
     document.querySelectorAll('.task').forEach((task) => {
         task.addEventListener('dragstart', (event) => {
             state.drag = {
@@ -1815,6 +1976,22 @@ elements.openTaskModal.addEventListener('click', () => {
     openModal('taskModal');
 });
 
+elements.assignTaskMember.addEventListener('click', async () => {
+    const task = findTask(state.editingTaskId);
+    const userId = elements.taskAssigneeSelect.value;
+    if (!userId) return;
+    if (!task) {
+        state.pendingTaskAssigneeIds.add(String(userId));
+        renderTaskAssignees(null);
+        return;
+    }
+    try {
+        await updateTaskAssignee(task.id, userId, true);
+    } catch (error) {
+        setStatus(error.message, true);
+    }
+});
+
 elements.openCategoryModal.addEventListener('click', () => {
     resetCategoryForm();
     openModal('categoryModal');
@@ -1823,6 +2000,11 @@ elements.openCategoryModal.addEventListener('click', () => {
 elements.openColumnModal.addEventListener('click', () => {
     resetColumnForm();
     openModal('columnModal');
+});
+
+elements.taskAssignmentFilter.addEventListener('change', (event) => {
+    state.assignedToMeOnly = event.target.value === 'mine';
+    renderBoard();
 });
 
 document.querySelectorAll('[data-close]').forEach((button) => {

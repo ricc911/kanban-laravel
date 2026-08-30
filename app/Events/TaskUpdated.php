@@ -19,7 +19,7 @@ class TaskUpdated implements ShouldBroadcastNow, ShouldDispatchAfterCommit
         $this->task = self::taskPayload($task);
     }
 
-    /** @var array<string, bool|float|int|string|null> */
+    /** @var array<string, bool|float|int|string|null|array<int, array<string, int|string|null>>> */
     public array $task;
 
     public function broadcastOn(): array

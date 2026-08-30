@@ -9,6 +9,7 @@ use App\Models\Folder;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceInvitation;
+use Illuminate\Support\Collection;
 
 final class RealtimePayload
 {
@@ -83,8 +84,27 @@ final class RealtimePayload
         return [
             'id' => (int) $member->id,
             'name' => $member->name,
+            'last_name' => $member->last_name,
+            'username' => $member->username,
             'role' => $role,
         ];
+    }
+
+    /** @return array<string, int|string|null> */
+    public static function assignee(User $user): array
+    {
+        return [
+            'id' => (int) $user->id,
+            'name' => $user->name,
+            'last_name' => $user->last_name,
+            'username' => $user->username,
+        ];
+    }
+
+    /** @param Collection<int, User> $users */
+    public static function assignees(Collection $users): array
+    {
+        return $users->map(fn (User $user): array => self::assignee($user))->values()->all();
     }
 
     /** @return array<string, bool|int|string|null> */

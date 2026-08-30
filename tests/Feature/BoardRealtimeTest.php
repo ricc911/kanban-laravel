@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\ActivityLogged;
+use App\Events\TaskAssigneesChanged;
 use App\Events\TaskCreated;
 use App\Events\TaskDeleted;
 use App\Events\TaskEditingStateChanged;
@@ -145,7 +146,37 @@ class BoardRealtimeTest extends TestCase
             'priority',
             'due_at',
             'archived',
+            'assignees',
         ], array_keys($createdEvent->broadcastWith()['task']));
+    }
+
+    public function test_task_assignees_changed_broadcasts_the_final_safe_list_on_its_board(): void
+    {
+        [$owner, $workspace, $board, $column] = $this->sharedBoard();
+        $member = User::factory()->create(['last_name' => 'Rossi', 'username' => 'mario']);
+        $workspace->members()->attach($member->id, ['role' => 'member', 'joined_at' => now()]);
+        $task = $this->task($board, $column, 'Assegnata');
+        Event::fake([TaskAssigneesChanged::class, ActivityLogged::class]);
+
+        $this->actingAs($owner)
+            ->postJson("/api/tasks/{$task->id}/assignees", ['user_id' => $member->id])
+            ->assertOk();
+
+        Event::assertDispatched(TaskAssigneesChanged::class, function (TaskAssigneesChanged $event) use ($board, $task, $member): bool {
+            $payload = $event->broadcastWith();
+
+            return $event->broadcastAs() === 'task.assignees_changed'
+                && $event->broadcastOn()[0]->name === "private-board.{$board->id}"
+                && $payload['board_id'] === $board->id
+                && $payload['task_id'] === $task->id
+                && $payload['assignees'] === [[
+                    'id' => $member->id,
+                    'name' => $member->name,
+                    'last_name' => 'Rossi',
+                    'username' => 'mario',
+                ]]
+                && ! array_key_exists('email', $payload['assignees'][0]);
+        });
     }
 
     public function test_effective_task_update_dispatches_but_an_unchanged_update_does_not(): void

@@ -15,6 +15,7 @@ export function subscribeToBoard(boardId, handlers) {
             'task.moved': handlers.moved,
             'task.deleted': handlers.deleted,
             'task.editing_state_changed': handlers.editingStateChanged,
+            'task.assignees_changed': handlers.assigneesChanged,
             'tasks.reordered': handlers.reordered,
             'board.updated': handlers.boardUpdated,
             'board.archived': handlers.boardArchived,
