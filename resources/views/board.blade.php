@@ -111,6 +111,19 @@
                     </div>
                 </div>
 
+                <section class="field task-comments-field" aria-labelledby="taskCommentsTitle">
+                    <div class="task-comments-heading">
+                        <label id="taskCommentsTitle">Commenti</label>
+                        <span class="hint" id="taskCommentsStatus" aria-live="polite"></span>
+                    </div>
+                    <div id="taskComments" class="task-comments-list" aria-live="polite"></div>
+                    <div id="taskCommentForm" class="task-comment-form" hidden>
+                        <label class="sr-only" for="taskCommentBody">Nuovo commento</label>
+                        <textarea id="taskCommentBody" maxlength="5000" rows="3" placeholder="Scrivi un commento..."></textarea>
+                        <button type="button" class="btn btn-primary" id="taskCommentSubmit">Commenta</button>
+                    </div>
+                </section>
+
                 <div class="field">
                     <label for="priority">Priorit&agrave;</label>
                     <select id="priority">
@@ -155,6 +168,22 @@
                     <button type="submit" class="btn btn-primary">Salva evento</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="commentConfirmModal" hidden>
+        <div class="modal comment-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="commentConfirmTitle">
+            <div class="modal-head">
+                <h2 id="commentConfirmTitle">Elimina commento</h2>
+                <button class="close" type="button" id="commentConfirmCancel" aria-label="Chiudi">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="commentConfirmMessage">Eliminare questo commento?</p>
+                <div class="modal-actions">
+                    <button type="button" class="btn" id="commentConfirmCancelButton">Annulla</button>
+                    <button type="button" class="btn btn-danger" id="commentConfirmOk">Elimina</button>
+                </div>
+            </div>
         </div>
     </div>
 

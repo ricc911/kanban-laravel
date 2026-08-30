@@ -6,6 +6,7 @@ use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Category;
 use App\Models\Folder;
+use App\Models\TaskComment;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceInvitation;
@@ -105,6 +106,23 @@ final class RealtimePayload
     public static function assignees(Collection $users): array
     {
         return $users->map(fn (User $user): array => self::assignee($user))->values()->all();
+    }
+
+    /** @return array<string, bool|int|string|null|array<string, int|string|null>> */
+    public static function comment(TaskComment $comment): array
+    {
+        $comment->loadMissing('author');
+
+        return [
+            'id' => (int) $comment->id,
+            'task_id' => (int) $comment->task_id,
+            'body' => $comment->body,
+            'created_at' => $comment->created_at?->toISOString(),
+            'updated_at' => $comment->updated_at?->toISOString(),
+            'edited' => $comment->created_at !== null && $comment->updated_at !== null
+                && ! $comment->created_at->equalTo($comment->updated_at),
+            'author' => $comment->author ? self::assignee($comment->author) : null,
+        ];
     }
 
     /** @return array<string, bool|int|string|null> */

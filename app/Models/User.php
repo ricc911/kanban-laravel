@@ -89,6 +89,11 @@ class User extends Authenticatable
         return $this->belongsToMany(Task::class, 'task_assignees')->withTimestamps();
     }
 
+    public function taskComments(): HasMany
+    {
+        return $this->hasMany(TaskComment::class);
+    }
+
     public function isMemberOf(Workspace $workspace): bool
     {
         return $workspace->hasMember($this);

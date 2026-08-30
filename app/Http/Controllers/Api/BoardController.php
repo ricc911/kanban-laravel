@@ -87,6 +87,7 @@ class BoardController extends Controller
                     'tasks' => fn ($query) => $query
                         ->where('archived', false)
                         ->with('assignees')
+                        ->withCount('comments')
                         ->orderBy('position'),
                 ]),
             'categories' => fn ($query) => $query

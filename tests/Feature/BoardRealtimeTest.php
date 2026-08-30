@@ -146,8 +146,10 @@ class BoardRealtimeTest extends TestCase
             'priority',
             'due_at',
             'archived',
+            'comments_count',
             'assignees',
         ], array_keys($createdEvent->broadcastWith()['task']));
+        $this->assertSame(0, $createdEvent->broadcastWith()['task']['comments_count']);
     }
 
     public function test_task_assignees_changed_broadcasts_the_final_safe_list_on_its_board(): void

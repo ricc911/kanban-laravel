@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\FolderController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\TaskAssigneeController;
+use App\Http\Controllers\Api\TaskCommentController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TaskEditingController;
 use App\Http\Controllers\Api\WorkspaceController;
@@ -53,6 +54,10 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function (): void {
     Route::post('boards/{board}/columns/{column}/tasks', [TaskController::class, 'store']);
     Route::patch('tasks/{task}', [TaskController::class, 'update']);
     Route::post('tasks/{task}/editing-state', [TaskEditingController::class, 'update']);
+    Route::get('tasks/{task}/comments', [TaskCommentController::class, 'index']);
+    Route::post('tasks/{task}/comments', [TaskCommentController::class, 'store']);
+    Route::patch('task-comments/{comment}', [TaskCommentController::class, 'update']);
+    Route::delete('task-comments/{comment}', [TaskCommentController::class, 'destroy']);
     Route::post('tasks/{task}/move', [TaskController::class, 'move']);
     Route::delete('tasks/{task}', [TaskController::class, 'destroy']);
     Route::post('tasks/{task}/assignees', [TaskAssigneeController::class, 'store']);

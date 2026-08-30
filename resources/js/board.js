@@ -36,6 +36,12 @@ const state = {
     editingCleanupInterval: null,
     editingHeartbeat: null,
     remoteTaskEditors: new Map(),
+    taskComments: [],
+    taskCommentsTaskId: null,
+    taskCommentsRequestToken: 0,
+    editingCommentId: null,
+    commentSubmitting: false,
+    commentConfirmResolver: null,
 };
 
 const elements = {
@@ -71,6 +77,16 @@ const elements = {
     taskAssigneeList: document.querySelector('#taskAssigneeList'),
     taskAssigneeControls: document.querySelector('#taskAssigneeControls'),
     taskAssigneeSelect: document.querySelector('#taskAssigneeSelect'),
+    taskComments: document.querySelector('#taskComments'),
+    taskCommentsStatus: document.querySelector('#taskCommentsStatus'),
+    taskCommentForm: document.querySelector('#taskCommentForm'),
+    taskCommentBody: document.querySelector('#taskCommentBody'),
+    taskCommentSubmit: document.querySelector('#taskCommentSubmit'),
+    commentConfirmModal: document.querySelector('#commentConfirmModal'),
+    commentConfirmMessage: document.querySelector('#commentConfirmMessage'),
+    commentConfirmOk: document.querySelector('#commentConfirmOk'),
+    commentConfirmCancel: document.querySelector('#commentConfirmCancel'),
+    commentConfirmCancelButton: document.querySelector('#commentConfirmCancelButton'),
     assignTaskMember: document.querySelector('#assignTaskMember'),
     categoryId: document.querySelector('#categoryId'),
     categoryName: document.querySelector('#categoryName'),
@@ -492,8 +508,124 @@ function normalizeTask(task) {
         priority: task.priority ?? '',
         due_at: task.due_at ?? null,
         position: Number(task.position ?? 0),
+        comments_count: task.comments_count === undefined ? undefined : Number(task.comments_count),
         assignees: Array.isArray(task.assignees) ? task.assignees.map(normalizeAssignee) : undefined,
     };
+}
+
+function applyTaskCommentsCount(taskId, count) {
+    const task = findTask(taskId);
+    if (task) task.comments_count = Math.max(0, Number(count ?? task.comments_count ?? 0));
+}
+
+function commentAuthorName(author) {
+    if (!author) return 'Utente eliminato';
+    const name = [author.name, author.last_name].filter(Boolean).join(' ') || 'Utente';
+    return author.username ? `${name} (@${author.username})` : name;
+}
+
+function commentInitials(author) {
+    return author ? presenceInitials([author.name, author.last_name].filter(Boolean).join(' ') || 'Utente') : '?';
+}
+
+function renderTaskComments() {
+    if (!elements.taskComments) return;
+    elements.taskComments.replaceChildren();
+    const hasTask = Boolean(state.editingTaskId);
+    const canComment = hasTask && state.workspaceRole !== 'viewer' && !state.taskModalDeleted;
+    elements.taskCommentForm.hidden = !canComment;
+    elements.taskCommentSubmit.disabled = state.commentSubmitting;
+    if (!hasTask || state.taskCommentsTaskId !== state.editingTaskId) {
+        const message = document.createElement('p'); message.className = 'task-comments-empty';
+        message.textContent = hasTask ? 'Caricamento commenti...' : 'I commenti saranno disponibili dopo il salvataggio.';
+        elements.taskComments.append(message); return;
+    }
+    if (!state.taskComments.length) {
+        const message = document.createElement('p'); message.className = 'task-comments-empty';
+        message.textContent = elements.taskCommentsStatus.textContent || 'Nessun commento.';
+        elements.taskComments.append(message); return;
+    }
+    state.taskComments.forEach((comment) => {
+        const item = document.createElement('article'); item.className = 'task-comment';
+        const head = document.createElement('div'); head.className = 'task-comment-head';
+        const avatar = document.createElement('span'); avatar.className = 'task-comment-avatar'; avatar.textContent = commentInitials(comment.author);
+        const author = document.createElement('strong'); author.textContent = commentAuthorName(comment.author);
+        const date = document.createElement('time'); date.textContent = comment.created_at ? new Date(comment.created_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '';
+        head.append(avatar, author, date);
+        if (comment.edited) { const edited = document.createElement('span'); edited.className = 'task-comment-edited'; edited.textContent = 'Modificato'; head.append(edited); }
+        item.append(head);
+        if (state.editingCommentId === String(comment.id)) {
+            const input = document.createElement('textarea'); input.className = 'task-comment-edit-input'; input.value = comment.body; input.maxLength = 5000;
+            const actions = document.createElement('div'); actions.className = 'task-comment-actions';
+            const save = document.createElement('button'); save.className = 'btn btn-primary'; save.type = 'button'; save.textContent = 'Salva'; save.onclick = () => updateTaskComment(comment.id, input.value);
+            const cancel = document.createElement('button'); cancel.className = 'btn'; cancel.type = 'button'; cancel.textContent = 'Annulla'; cancel.onclick = () => { state.editingCommentId = null; renderTaskComments(); };
+            actions.append(save, cancel); item.append(input, actions);
+        } else {
+            const body = document.createElement('p'); body.className = 'task-comment-body'; body.textContent = comment.body; item.append(body);
+            const own = comment.author?.id && String(comment.author.id) === String(currentUserId());
+            const canDelete = own || ['owner', 'admin'].includes(state.workspaceRole);
+            const actions = document.createElement('div'); actions.className = 'task-comment-actions';
+            if (own && state.workspaceRole !== 'viewer') { const edit = document.createElement('button'); edit.className = 'btn'; edit.type = 'button'; edit.textContent = 'Modifica'; edit.onclick = () => { state.editingCommentId = String(comment.id); renderTaskComments(); }; actions.append(edit); }
+            if (canDelete) { const remove = document.createElement('button'); remove.className = 'btn btn-danger'; remove.type = 'button'; remove.textContent = 'Elimina'; remove.onclick = () => deleteTaskComment(comment.id); actions.append(remove); }
+            if (actions.childElementCount) item.append(actions);
+        }
+        elements.taskComments.append(item);
+    });
+}
+
+function upsertTaskComment(comment) {
+    const normalized = { ...comment, id: String(comment.id) };
+    state.taskComments = [...state.taskComments.filter((item) => String(item.id) !== normalized.id), normalized]
+        .sort((left, right) => new Date(left.created_at) - new Date(right.created_at));
+}
+
+async function loadTaskComments(taskId) {
+    const token = ++state.taskCommentsRequestToken; state.taskCommentsTaskId = String(taskId); state.taskComments = []; state.editingCommentId = null; elements.taskCommentsStatus.textContent = ''; renderTaskComments();
+    try {
+        const response = await request(`/api/tasks/${encodeURIComponent(taskId)}/comments`);
+        if (token !== state.taskCommentsRequestToken || state.editingTaskId !== String(taskId)) return;
+        state.taskComments = (response.comments ?? []).map((comment) => ({ ...comment, id: String(comment.id) })); renderTaskComments();
+    } catch (error) {
+        if (token !== state.taskCommentsRequestToken || state.editingTaskId !== String(taskId)) return;
+        elements.taskCommentsStatus.textContent = 'Impossibile caricare i commenti.'; renderTaskComments();
+    }
+}
+
+async function createTaskComment() {
+    const body = elements.taskCommentBody.value.trim(); if (!body || !state.editingTaskId || state.commentSubmitting) return;
+    state.commentSubmitting = true; renderTaskComments();
+    try { const response = await request(`/api/tasks/${encodeURIComponent(state.editingTaskId)}/comments`, { method: 'POST', body: JSON.stringify({ body }) }); upsertTaskComment(response.data); applyTaskCommentsCount(state.editingTaskId, response.comments_count); elements.taskCommentBody.value = ''; renderTaskComments(); renderBoard(); }
+    catch (error) { elements.taskCommentsStatus.textContent = error.message; renderTaskComments(); }
+    finally { state.commentSubmitting = false; renderTaskComments(); }
+}
+
+async function updateTaskComment(commentId, body) {
+    try { const response = await request(`/api/task-comments/${encodeURIComponent(commentId)}`, { method: 'PATCH', body: JSON.stringify({ body }) }); upsertTaskComment(response.data); state.editingCommentId = null; renderTaskComments(); }
+    catch (error) { elements.taskCommentsStatus.textContent = error.message; renderTaskComments(); }
+}
+
+async function deleteTaskComment(commentId) {
+    if (!await confirmCommentDeletion()) return;
+    try { await request(`/api/task-comments/${encodeURIComponent(commentId)}`, { method: 'DELETE' }); state.taskComments = state.taskComments.filter((comment) => String(comment.id) !== String(commentId)); const task = findTask(state.editingTaskId); applyTaskCommentsCount(state.editingTaskId, Math.max(0, (task?.comments_count ?? 1) - 1)); renderTaskComments(); renderBoard(); }
+    catch (error) { elements.taskCommentsStatus.textContent = error.message; renderTaskComments(); }
+}
+
+function closeCommentConfirmation(result) {
+    elements.commentConfirmModal.hidden = true;
+    elements.commentConfirmModal.classList.remove('open');
+    const resolve = state.commentConfirmResolver;
+    state.commentConfirmResolver = null;
+    resolve?.(result);
+}
+
+function confirmCommentDeletion() {
+    elements.commentConfirmMessage.textContent = 'Eliminare questo commento?';
+    elements.commentConfirmModal.hidden = false;
+    elements.commentConfirmModal.classList.add('open');
+
+    return new Promise((resolve) => {
+        state.commentConfirmResolver = resolve;
+    });
 }
 
 function normalizeColumn(column) {
@@ -534,6 +666,7 @@ function upsertTaskInState(task) {
     const current = findTask(task.id);
     const normalized = normalizeTask(task);
     if (normalized.assignees === undefined) normalized.assignees = current?.assignees ?? [];
+    if (normalized.comments_count === undefined) normalized.comments_count = current?.comments_count ?? 0;
     removeTaskFromState(normalized.id);
 
     if (normalized.archived) {
@@ -651,6 +784,10 @@ function renderTaskModalRealtimeState() {
 
 function clearTaskModalRealtimeState() {
     stopTaskEditing();
+    state.taskCommentsRequestToken += 1;
+    state.taskComments = [];
+    state.taskCommentsTaskId = null;
+    state.editingCommentId = null;
     state.editingTaskId = null;
     state.taskModalBaseline = {};
     state.latestRemoteTask = null;
@@ -669,6 +806,7 @@ function clearTaskModalRealtimeState() {
         editableTaskFields[field]?.classList.remove('has-remote-conflict');
     });
     renderTaskEditingIndicator();
+    renderTaskComments();
 }
 
 function beginTaskModalEditing(task) {
@@ -773,6 +911,26 @@ function applyRemoteTaskAssigneesChanged(payload) {
     applyTaskAssignees(payload.task_id, payload.assignees);
 }
 
+function applyRemoteTaskCommentCreated(payload) {
+    if (!isCurrentBoard(payload) || !payload.comment) return;
+    applyTaskCommentsCount(payload.task_id, payload.comments_count);
+    if (state.editingTaskId === String(payload.task_id)) { upsertTaskComment(payload.comment); renderTaskComments(); }
+    renderAfterRealtimeUpdate();
+}
+
+function applyRemoteTaskCommentUpdated(payload) {
+    if (!isCurrentBoard(payload) || !payload.comment) return;
+    applyTaskCommentsCount(payload.task_id, payload.comments_count);
+    if (state.editingTaskId === String(payload.task_id)) { upsertTaskComment(payload.comment); renderTaskComments(); }
+}
+
+function applyRemoteTaskCommentDeleted(payload) {
+    if (!isCurrentBoard(payload)) return;
+    applyTaskCommentsCount(payload.task_id, payload.comments_count);
+    if (state.editingTaskId === String(payload.task_id)) { state.taskComments = state.taskComments.filter((comment) => String(comment.id) !== String(payload.comment_id)); renderTaskComments(); }
+    renderAfterRealtimeUpdate();
+}
+
 function applyRemoteTaskMoved(payload) {
     if (Number(payload?.task?.board_id) !== Number(boardId())) return;
 
@@ -790,6 +948,11 @@ function applyRemoteTaskDeleted(payload) {
 
     removeTaskFromState(payload.task_id);
     state.remoteTaskEditors.delete(String(payload.task_id));
+    if (state.editingTaskId === String(payload.task_id)) {
+        state.taskCommentsRequestToken += 1;
+        state.taskComments = [];
+        state.taskCommentsTaskId = null;
+    }
     if (state.editingTaskId === String(payload.task_id)) {
         markTaskDeletedRemotely();
     }
@@ -944,6 +1107,7 @@ function handleRemoteBoardRoleUpdated(payload) {
     state.workspaceRole = payload.role ?? state.workspaceRole;
     if (state.workspaceRole === 'viewer') stopTaskEditing();
     renderBoard();
+    renderTaskComments();
 }
 
 function handleRemoteBoardDeleted(payload) {
@@ -965,6 +1129,9 @@ function subscribeToCurrentBoard() {
         deleted: applyRemoteTaskDeleted,
         editingStateChanged: applyRemoteTaskEditingState,
         assigneesChanged: applyRemoteTaskAssigneesChanged,
+        commentCreated: applyRemoteTaskCommentCreated,
+        commentUpdated: applyRemoteTaskCommentUpdated,
+        commentDeleted: applyRemoteTaskCommentDeleted,
         reordered: applyRemoteTasksReordered,
         boardUpdated: applyRemoteBoardChanged,
         boardArchived: applyRemoteBoardChanged,
@@ -1202,6 +1369,15 @@ function renderTask(task) {
             assigneeBadges.append(more);
         }
         article.append(assigneeBadges);
+    }
+
+    if (task.comments_count > 0) {
+        const comments = document.createElement('span');
+        comments.className = 'task-comment-count';
+        comments.append(icon('message-circle'));
+        comments.append(document.createTextNode(String(task.comments_count)));
+        comments.title = `${task.comments_count} commenti`;
+        article.append(comments);
     }
 
     return article;
@@ -1488,6 +1664,7 @@ function openModal(id) {
 
 function closeModal(id) {
     document.getElementById(id)?.classList.remove('open');
+    if (id === 'commentConfirmModal' && state.commentConfirmResolver) closeCommentConfirmation(false);
     if (id === 'taskModal') clearTaskModalRealtimeState();
 }
 
@@ -1530,6 +1707,7 @@ function editTask(task) {
     elements.deleteTask.style.display = 'inline-flex';
     startTaskEditing(task.id);
     renderTaskAssignees(task);
+    loadTaskComments(task.id);
     renderTaskModalRealtimeState();
 }
 
@@ -1991,6 +2169,11 @@ elements.assignTaskMember.addEventListener('click', async () => {
         setStatus(error.message, true);
     }
 });
+
+elements.taskCommentSubmit.addEventListener('click', createTaskComment);
+elements.commentConfirmOk.addEventListener('click', () => closeCommentConfirmation(true));
+elements.commentConfirmCancel.addEventListener('click', () => closeCommentConfirmation(false));
+elements.commentConfirmCancelButton.addEventListener('click', () => closeCommentConfirmation(false));
 
 elements.openCategoryModal.addEventListener('click', () => {
     resetCategoryForm();

@@ -24,6 +24,7 @@ trait InteractsWithTaskPayload
             'priority' => $task->priority,
             'due_at' => $task->due_at?->toISOString(),
             'archived' => (bool) $task->archived,
+            'comments_count' => (int) ($task->comments_count ?? 0),
         ];
 
         if ($task->relationLoaded('assignees')) {
