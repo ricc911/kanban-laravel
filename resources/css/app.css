@@ -374,9 +374,12 @@
 
     .project-name {
       margin: 0;
+      padding-right: 42px;
       font-size: 18px;
       font-weight: 800;
       line-height: 1.25;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .project-meta {
@@ -1543,5 +1546,271 @@
   .auth-card + .auth-card {
     border-left: 0;
     border-top: 1px solid var(--line);
+  }
+}
+
+/* Responsive layout: keep controls readable without changing the desktop density. */
+@media (max-width: 760px) {
+  .topbar {
+    height: auto;
+    min-height: 68px;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 14px;
+  }
+
+  .topbar .brand {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .topbar-actions > * {
+    min-width: 0;
+  }
+
+  .workspace-select {
+    min-width: 0;
+    flex: 1 1 180px;
+  }
+
+  .topbar-actions .btn {
+    min-height: 40px;
+  }
+
+  .page {
+    width: min(100% - 24px, 1250px);
+    padding: 24px 0 42px;
+  }
+
+  .workspace-head {
+    gap: 16px;
+  }
+
+  .workspace-title,
+  .workspace-actions {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .workspace-actions {
+    justify-content: flex-start;
+  }
+
+  .workspace-actions .btn {
+    flex: 1 1 auto;
+  }
+
+  .folder-path {
+    align-items: flex-start;
+    overflow-wrap: anywhere;
+  }
+
+  .folder-path button {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+
+  .folders-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+  }
+
+  .folder-card {
+    min-width: 0;
+  }
+
+  .folder-card-actions {
+    opacity: 1;
+  }
+
+  .project-section-head {
+    align-items: flex-start;
+  }
+
+  .project-card,
+  .project-name,
+  .project-meta {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .project-card .project-name {
+    padding-right: 42px;
+    word-break: break-word;
+  }
+
+  .project-actions,
+  .project-side-actions {
+    flex-wrap: wrap;
+  }
+
+  .workspace-danger-zone {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workspace-danger-zone .modal-actions {
+    justify-content: flex-start;
+  }
+
+  .workspace-invitation {
+    align-items: flex-start;
+  }
+
+  .workspace-invitation > :first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .notifications-panel {
+    top: 76px;
+    right: 10px;
+    left: 10px;
+    width: auto;
+    max-height: min(620px, calc(100dvh - 88px));
+  }
+
+  .notifications-head {
+    padding: 16px;
+  }
+
+  .notifications-body {
+    padding: 12px;
+  }
+
+  .toast-message {
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    width: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .auth-shell {
+    place-items: start center;
+    min-height: 100dvh;
+    padding: 12px;
+  }
+
+  .auth-panel {
+    width: 100%;
+    border-radius: 12px;
+  }
+
+  .auth-panel-head,
+  .auth-card {
+    padding: 16px;
+  }
+
+  .auth-panel-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .auth-panel-head .message {
+    flex-basis: 100%;
+  }
+
+  .form-actions {
+    justify-content: stretch;
+  }
+
+  .form-actions .btn {
+    width: 100%;
+  }
+
+  .workspace-panel,
+  .workspace-info-card {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .workspace-panel-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .workspace-member-row {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .workspace-member-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .workspace-member-controls {
+    justify-content: flex-end;
+    gap: 7px;
+  }
+
+  .workspace-member-row select {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .workspace-select {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .modal-backdrop {
+    padding: 8px;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: min(760px, calc(100dvh - 16px));
+    border-radius: 12px;
+  }
+
+  .modal-head {
+    padding: 14px 16px;
+  }
+
+  .modal-head h2 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .modal-actions,
+  .confirm-actions {
+    flex-wrap: wrap;
+  }
+
+  .modal-actions .btn {
+    min-height: 40px;
+  }
+
+  .confirm-actions .btn {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 380px) {
+  .topbar-actions .btn {
+    flex: 1 1 calc(50% - 8px);
+  }
+
+  .topbar-actions .notification-button {
+    flex: 0 0 42px;
+  }
+
+  .workspace-actions .btn {
+    flex-basis: 100%;
   }
 }
