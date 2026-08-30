@@ -39,6 +39,8 @@ const elements = {
     accountModal: document.querySelector('[data-account-modal]'),
     profileForm: document.querySelector('[data-profile-form]'),
     accountName: document.querySelector('[data-account-name]'),
+    accountLastName: document.querySelector('[data-account-last-name]'),
+    accountUsername: document.querySelector('[data-account-username]'),
     accountEmail: document.querySelector('[data-account-email]'),
     passwordForm: document.querySelector('[data-password-form]'),
     currentPassword: document.querySelector('[data-current-password]'),
@@ -1284,6 +1286,8 @@ elements.logoutButton.addEventListener('click', async () => {
 
 elements.accountButton.addEventListener('click', () => {
     elements.accountName.value = state.user?.name ?? '';
+    elements.accountLastName.value = state.user?.last_name ?? '';
+    elements.accountUsername.value = state.user?.username ?? '';
     elements.accountEmail.value = state.user?.email ?? '';
     elements.accountMessage.hidden = true;
     elements.accountModal.hidden = false;
@@ -1293,9 +1297,9 @@ elements.accountButton.addEventListener('click', () => {
 elements.profileForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     try {
-        const response = await request('/api/account/profile', { method: 'PATCH', body: JSON.stringify({ name: elements.accountName.value.trim() }) });
+        const response = await request('/api/account/profile', { method: 'PATCH', body: JSON.stringify({ name: elements.accountName.value.trim(), last_name: elements.accountLastName.value.trim(), username: elements.accountUsername.value.trim() }) });
         state.user = response.data;
-        elements.accountMessage.textContent = 'Nome aggiornato.';
+        elements.accountMessage.textContent = 'Profilo aggiornato.';
         elements.accountMessage.hidden = false;
     } catch (error) { elements.accountMessage.textContent = error.message; elements.accountMessage.hidden = false; }
 });

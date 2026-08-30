@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\FolderController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\TaskController;
+use App\Http\Controllers\Api\TaskEditingController;
 use App\Http\Controllers\Api\WorkspaceController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -50,6 +51,7 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function (): void {
 
     Route::post('boards/{board}/columns/{column}/tasks', [TaskController::class, 'store']);
     Route::patch('tasks/{task}', [TaskController::class, 'update']);
+    Route::post('tasks/{task}/editing-state', [TaskEditingController::class, 'update']);
     Route::post('tasks/{task}/move', [TaskController::class, 'move']);
     Route::delete('tasks/{task}', [TaskController::class, 'destroy']);
     Route::post('columns/{column}/tasks/reorder', [TaskController::class, 'reorder']);

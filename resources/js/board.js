@@ -28,6 +28,11 @@ const state = {
     workspaceRole: 'member',
     activities: [],
     activityOpenDay: null,
+    editingSessionId: null,
+    editingSessionTaskId: null,
+    editingCleanupInterval: null,
+    editingHeartbeat: null,
+    remoteTaskEditors: new Map(),
 };
 
 const elements = {
@@ -57,6 +62,7 @@ const elements = {
     taskColorPreset: document.querySelector('#colorPreset'),
     taskModalTitle: document.querySelector('#taskModalTitle'),
     taskSubmit: document.querySelector('#taskForm button[type="submit"]'),
+    taskEditingIndicator: document.querySelector('#taskEditingIndicator'),
     deleteTask: document.querySelector('#deleteTask'),
     taskRealtimeStatus: null,
     categoryId: document.querySelector('#categoryId'),
@@ -95,6 +101,113 @@ function boardId() {
 function currentUserId() {
     return document.body.dataset.userId;
 }
+
+function newEditingSessionId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+        const random = Math.floor(Math.random() * 16);
+        const value = character === 'x' ? random : (random & 0x3) | 0x8;
+
+        return value.toString(16);
+    });
+}
+
+function taskEditorsFor(taskId) {
+    const editors = state.remoteTaskEditors.get(String(taskId));
+
+    return editors ? [...editors.values()] : [];
+}
+
+function renderTaskEditingIndicator() {
+    const indicator = elements.taskEditingIndicator;
+    if (!indicator) return;
+
+    const editors = state.editingTaskId
+        ? taskEditorsFor(state.editingTaskId).filter((editor) => editor.user.id !== String(currentUserId()))
+        : [];
+    indicator.replaceChildren();
+    indicator.hidden = editors.length === 0;
+    if (!editors.length) return;
+
+    const names = editors.map((editor) => {
+        const user = editor.user;
+        const fullName = [user.name, user.last_name].filter(Boolean).join(' ') || 'Utente';
+        return user.username ? `${fullName} (@${user.username})` : fullName;
+    });
+    const text = names.length === 1
+        ? `${names[0]} sta modificando questa task`
+        : `${names.slice(0, 2).join(' e ')}${names.length > 2 ? ` e altri ${names.length - 2}` : ''} stanno modificando questa task`;
+    indicator.textContent = text;
+}
+
+function applyRemoteTaskEditingState(payload) {
+    if (Number(payload?.board_id) !== Number(boardId()) || !payload?.task_id || !payload?.session_id || !payload?.user?.id) return;
+
+    const taskId = String(payload.task_id);
+    if (!state.remoteTaskEditors.has(taskId)) state.remoteTaskEditors.set(taskId, new Map());
+    const editors = state.remoteTaskEditors.get(taskId);
+    const sessionId = String(payload.session_id);
+    if (payload.active) {
+        editors.set(sessionId, { user: { ...payload.user, id: String(payload.user.id) }, lastSeen: Date.now() });
+    } else {
+        editors.delete(sessionId);
+    }
+    if (!editors.size) state.remoteTaskEditors.delete(taskId);
+    renderTaskEditingIndicator();
+}
+
+function cleanupStaleTaskEditors() {
+    const staleBefore = Date.now() - 50000;
+    state.remoteTaskEditors.forEach((editors, taskId) => {
+        editors.forEach((editor, sessionId) => {
+            if (editor.lastSeen < staleBefore) editors.delete(sessionId);
+        });
+        if (!editors.size) state.remoteTaskEditors.delete(taskId);
+    });
+    renderTaskEditingIndicator();
+}
+
+function sendTaskEditingState(active, keepalive = false) {
+    if (!state.editingSessionTaskId || !state.editingSessionId) return;
+
+    request(`/api/tasks/${encodeURIComponent(state.editingSessionTaskId)}/editing-state`, {
+        method: 'POST',
+        body: JSON.stringify({ active, session_id: state.editingSessionId }),
+        keepalive,
+    }).catch((error) => {
+        if (error.status === 403 && active) stopTaskEditing();
+    });
+}
+
+function startTaskEditing(taskId) {
+    if (state.workspaceRole === 'viewer') return;
+
+    stopTaskEditing();
+    state.editingSessionTaskId = String(taskId);
+    state.editingSessionId = newEditingSessionId();
+    sendTaskEditingState(true);
+    state.editingHeartbeat = window.setInterval(() => {
+        if (state.editingSessionTaskId && state.workspaceRole !== 'viewer') sendTaskEditingState(true);
+        else stopTaskEditing();
+    }, 20000);
+}
+
+function stopTaskEditing() {
+    if (!state.editingSessionTaskId || !state.editingSessionId) return;
+
+    window.clearInterval(state.editingHeartbeat);
+    state.editingHeartbeat = null;
+    sendTaskEditingState(false, true);
+    state.editingSessionTaskId = null;
+    state.editingSessionId = null;
+}
+
+state.editingCleanupInterval = window.setInterval(cleanupStaleTaskEditors, 5000);
+window.addEventListener('pagehide', () => {
+    stopTaskEditing();
+    window.clearInterval(state.editingCleanupInterval);
+});
 
 function normalizePresenceUser(user) {
     if (!user || user.id === undefined || user.id === null) return null;
@@ -501,6 +614,7 @@ function renderTaskModalRealtimeState() {
 }
 
 function clearTaskModalRealtimeState() {
+    stopTaskEditing();
     state.editingTaskId = null;
     state.taskModalBaseline = {};
     state.latestRemoteTask = null;
@@ -518,6 +632,7 @@ function clearTaskModalRealtimeState() {
         message.textContent = '';
         editableTaskFields[field]?.classList.remove('has-remote-conflict');
     });
+    renderTaskEditingIndicator();
 }
 
 function beginTaskModalEditing(task) {
@@ -577,6 +692,7 @@ function trackTaskFieldChange(field) {
 function markTaskDeletedRemotely() {
     if (!state.editingTaskId) return;
 
+    stopTaskEditing();
     state.taskModalDeleted = true;
     elements.taskSubmit.disabled = true;
     elements.deleteTask.disabled = true;
@@ -631,9 +747,11 @@ function applyRemoteTaskDeleted(payload) {
     if (Number(payload?.board_id) !== Number(boardId())) return;
 
     removeTaskFromState(payload.task_id);
+    state.remoteTaskEditors.delete(String(payload.task_id));
     if (state.editingTaskId === String(payload.task_id)) {
         markTaskDeletedRemotely();
     }
+    renderTaskEditingIndicator();
     renderAfterRealtimeUpdate();
 }
 
@@ -747,6 +865,8 @@ function applyRemoteActivity(payload) {
 function handleRemoteBoardAccessRemoved(payload) {
     if (!state.board || Number(state.board.workspace_id) !== Number(payload?.workspace?.id ?? payload?.workspace_id)) return;
 
+    stopTaskEditing();
+    state.remoteTaskEditors.clear();
     state.board = null;
     state.columns = [];
     state.categories = [];
@@ -767,6 +887,7 @@ function handleRemoteBoardRoleUpdated(payload) {
     if (!state.board || Number(state.board.workspace_id) !== Number(payload?.workspace?.id)) return;
 
     state.workspaceRole = payload.role ?? state.workspaceRole;
+    if (state.workspaceRole === 'viewer') stopTaskEditing();
     renderBoard();
 }
 
@@ -787,6 +908,7 @@ function subscribeToCurrentBoard() {
         updated: applyRemoteTaskUpdated,
         moved: applyRemoteTaskMoved,
         deleted: applyRemoteTaskDeleted,
+        editingStateChanged: applyRemoteTaskEditingState,
         reordered: applyRemoteTasksReordered,
         boardUpdated: applyRemoteBoardChanged,
         boardArchived: applyRemoteBoardChanged,
@@ -1155,6 +1277,8 @@ function setError(error) {
         422: error.message,
     };
 
+    stopTaskEditing();
+    state.remoteTaskEditors.clear();
     state.board = null;
     state.columns = [];
     state.categories = [];
@@ -1248,6 +1372,7 @@ function editTask(task) {
     elements.taskForm.dataset.columnId = String(task.board_column_id);
     elements.taskModalTitle.textContent = 'Modifica evento';
     elements.deleteTask.style.display = 'inline-flex';
+    startTaskEditing(task.id);
     renderTaskModalRealtimeState();
 }
 

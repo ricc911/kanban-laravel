@@ -128,8 +128,10 @@
                 <div class="modal-body">
                     <form data-profile-form>
                         <div class="field"><label for="accountName">Nome</label><input id="accountName" required maxlength="255" data-account-name></div>
+                        <div class="field"><label for="accountLastName">Cognome</label><input id="accountLastName" required maxlength="255" data-account-last-name></div>
+                        <div class="field"><label for="accountUsername">Username</label><input id="accountUsername" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_-]+" data-account-username></div>
                         <div class="field"><label>Email</label><input type="email" disabled data-account-email></div>
-                        <div class="modal-actions"><button class="btn btn-primary" type="submit">Salva nome</button></div>
+                        <div class="modal-actions"><button class="btn btn-primary" type="submit">Salva profilo</button></div>
                     </form>
                     <form data-password-form>
                         <div class="field"><label for="currentPassword">Password attuale</label><input id="currentPassword" type="password" required autocomplete="current-password" data-current-password></div>

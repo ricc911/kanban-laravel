@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Events\ActivityLogged;
 use App\Events\TaskCreated;
 use App\Events\TaskDeleted;
+use App\Events\TaskEditingStateChanged;
 use App\Events\TaskMoved;
 use App\Events\TasksReordered;
 use App\Events\TaskUpdated;
@@ -257,6 +258,75 @@ class BoardRealtimeTest extends TestCase
                 ];
         });
         $this->assertDatabaseMissing('activity_logs', ['action' => 'task.moved']);
+    }
+
+    public function test_editing_state_is_broadcast_with_authenticated_user_payload_without_database_changes(): void
+    {
+        [$owner, $workspace, $board, $column] = $this->sharedBoard();
+        $task = $this->task($board, $column, 'Modifica');
+        $updatedAt = $task->updated_at;
+        Event::fake([TaskEditingStateChanged::class]);
+
+        $this->actingAs($owner)
+            ->postJson("/api/tasks/{$task->id}/editing-state", [
+                'active' => true,
+                'session_id' => '11111111-1111-4111-8111-111111111111',
+                'user_id' => 999,
+                'username' => 'spoofed',
+            ])->assertOk();
+
+        Event::assertDispatched(TaskEditingStateChanged::class, function (TaskEditingStateChanged $event) use ($owner, $board, $task): bool {
+            $payload = $event->broadcastWith();
+
+            return $event->active
+                && $event->sessionId === '11111111-1111-4111-8111-111111111111'
+                && $payload['board_id'] === $board->id
+                && $payload['task_id'] === $task->id
+                && array_keys($payload['user']) === ['id', 'name', 'last_name', 'username']
+                && $payload['user']['id'] === $owner->id
+                && ! array_key_exists('email', $payload['user']);
+        });
+        $this->assertSame($updatedAt?->toISOString(), $task->fresh()->updated_at?->toISOString());
+        $this->assertDatabaseCount('activity_logs', 0);
+        $this->assertTrue($workspace->hasMember($owner));
+    }
+
+    public function test_editing_state_allows_member_and_stop_state(): void
+    {
+        [$owner, $workspace, $board, $column] = $this->sharedBoard();
+        $member = User::factory()->create();
+        $workspace->members()->attach($member->id, ['role' => 'member', 'joined_at' => now()]);
+        $task = $this->task($board, $column, 'Modifica');
+        Event::fake([TaskEditingStateChanged::class]);
+
+        $this->actingAs($member)
+            ->postJson("/api/tasks/{$task->id}/editing-state", [
+                'active' => false,
+                'session_id' => '22222222-2222-4222-8222-222222222222',
+            ])->assertOk();
+
+        Event::assertDispatched(TaskEditingStateChanged::class, fn (TaskEditingStateChanged $event): bool => ! $event->active);
+    }
+
+    public function test_viewer_and_outsider_cannot_signal_active_editing(): void
+    {
+        [$owner, $workspace, $board, $column] = $this->sharedBoard();
+        $viewer = User::factory()->create();
+        $outsider = User::factory()->create();
+        $workspace->members()->attach($viewer->id, ['role' => 'viewer', 'joined_at' => now()]);
+        $task = $this->task($board, $column, 'Protetta');
+        Event::fake([TaskEditingStateChanged::class]);
+
+        foreach ([$viewer, $outsider] as $user) {
+            $this->actingAs($user)
+                ->postJson("/api/tasks/{$task->id}/editing-state", [
+                    'active' => true,
+                    'session_id' => '33333333-3333-4333-8333-333333333333',
+                ])->assertForbidden();
+        }
+
+        Event::assertNotDispatched(TaskEditingStateChanged::class);
+        $this->assertTrue($workspace->hasMember($owner));
     }
 
     /**

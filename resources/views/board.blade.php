@@ -80,6 +80,7 @@
 
             <form class="modal-body" id="taskForm">
                 <input type="hidden" id="taskId">
+                <p class="task-editing-indicator" id="taskEditingIndicator" hidden aria-live="polite"></p>
 
                 <div class="field">
                     <label for="title">Titolo</label>
