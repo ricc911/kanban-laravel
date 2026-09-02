@@ -8,13 +8,14 @@ use App\Models\Board;
 use App\Models\Folder;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\Plans\PlanLimitService;
 use App\Support\RealtimePayload;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class CreateBoard
 {
-    public function __construct(private LogActivity $logger) {}
+    public function __construct(private LogActivity $logger, private PlanLimitService $planLimits) {}
 
     public function execute(
         User $user,
@@ -38,16 +39,7 @@ class CreateBoard
             ]);
         }
 
-        $workspace->loadMissing('owner.subscription.plan');
-
-        $plan = $workspace->owner->subscription->plan;
-
-        $projectsCount = $workspace->boards()->count();
-
-        if (
-            $plan->max_projects !== null &&
-            $projectsCount >= $plan->max_projects
-        ) {
+        if (! $this->planLimits->canCreateProject($workspace)) {
             throw ValidationException::withMessages([
                 'board' => 'Hai raggiunto il limite di progetti del piano.',
             ]);

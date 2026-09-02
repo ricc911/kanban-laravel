@@ -10,6 +10,7 @@ class Plan extends Model
     protected $fillable = [
         'name',
         'slug',
+        'price_cents',
         'max_shared_workspaces',
         'max_members_per_workspace',
         'max_projects',
@@ -20,6 +21,7 @@ class Plan extends Model
     protected function casts(): array
     {
         return [
+            'price_cents' => 'integer',
             'max_shared_workspaces' => 'integer',
             'max_members_per_workspace' => 'integer',
             'max_projects' => 'integer',

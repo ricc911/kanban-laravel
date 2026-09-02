@@ -105,6 +105,10 @@
                     <i class="icon" data-lucide="plus"></i>
                     Nuovo progetto
                 </button>
+                <a class="btn with-icon" href="{{ route('plans') }}">
+                    <i class="icon" data-lucide="credit-card"></i>
+                    Piani
+                </a>
                 <button class="btn with-icon" type="button" data-account>
                     <i class="icon" data-lucide="user"></i>
                     Account

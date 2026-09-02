@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Board;
 use App\Models\Folder;
+use App\Models\Plan;
 use App\Models\User;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -348,6 +349,7 @@ class FolderBoardWriteTest extends TestCase
             'email' => 'colors@example.com',
             'password' => bcrypt('password'),
         ]);
+        $user->subscription()->update(['plan_id' => Plan::where('slug', 'pro')->value('id')]);
         $workspace = $user->ownedWorkspaces()->where('type', 'personal')->firstOrFail();
         $folder = Folder::create(['workspace_id' => $workspace->id, 'name' => 'Current']);
 

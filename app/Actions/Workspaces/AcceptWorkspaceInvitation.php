@@ -8,13 +8,14 @@ use App\Events\WorkspaceChanged;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceInvitation;
+use App\Services\Plans\PlanLimitService;
 use App\Support\RealtimePayload;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class AcceptWorkspaceInvitation
 {
-    public function __construct(private LogActivity $logger) {}
+    public function __construct(private LogActivity $logger, private PlanLimitService $planLimits) {}
 
     public function execute(
         User $user,
@@ -43,19 +44,18 @@ class AcceptWorkspaceInvitation
         }
 
         $workspace = $invitation->workspace;
-        $plan = $workspace->owner->subscription->plan;
-        $ownerId = (int) $workspace->owner_id;
-
-        if (
-            $plan->max_members_per_workspace !== null &&
-            $workspace->members()->count() >= $plan->max_members_per_workspace
-        ) {
-            throw ValidationException::withMessages([
-                'workspace' => 'Il workspace ha raggiunto il limite di membri.',
-            ]);
-        }
 
         DB::transaction(function () use ($workspace, $user, $invitation): void {
+            $owner = User::query()->lockForUpdate()->findOrFail($workspace->owner_id);
+            $workspace = Workspace::query()->lockForUpdate()->findOrFail($workspace->id);
+            $workspace->setRelation('owner', $owner);
+
+            if (! $this->planLimits->canAcceptMember($workspace)) {
+                throw ValidationException::withMessages([
+                    'workspace' => 'Il workspace ha raggiunto il limite di membri.',
+                ]);
+            }
+
             $workspace->members()->syncWithoutDetaching([
                 $user->id => [
                     'role' => $invitation->role,

@@ -7,13 +7,15 @@ use App\Events\UserRealtimeEvent;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceInvitation;
+use App\Services\Plans\PlanLimitService;
 use App\Support\RealtimePayload;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class InviteWorkspaceMember
 {
-    public function __construct(private LogActivity $logger) {}
+    public function __construct(private LogActivity $logger, private PlanLimitService $planLimits) {}
 
     public function execute(
         User $actor,
@@ -28,69 +30,58 @@ class InviteWorkspaceMember
         }
 
         if ($workspace->roleFor($actor) === 'admin' && $role === 'admin') {
-            throw ValidationException::withMessages(['role' => 'Un amministratore può invitare solo membri o visualizzatori.']);
+            throw ValidationException::withMessages(['role' => 'Un amministratore puÃ² invitare solo membri o visualizzatori.']);
         }
 
-        $workspace->loadMissing('owner.subscription.plan');
+        [$workspace, $invitation, $recipient] = DB::transaction(function () use ($actor, $workspace, $email, $role): array {
+            $owner = User::query()->lockForUpdate()->findOrFail($workspace->owner_id);
+            $workspace = Workspace::query()->lockForUpdate()->findOrFail($workspace->id);
+            $workspace->setRelation('owner', $owner);
 
-        $plan = $workspace->owner->subscription->plan;
+            if (! $this->planLimits->canInviteMember($workspace)) {
+                throw ValidationException::withMessages([
+                    'workspace' => 'Hai raggiunto il limite di membri del workspace.',
+                ]);
+            }
 
-        $membersCount = $workspace->members()->count();
+            $identifier = trim($email);
+            $isEmail = filter_var($identifier, FILTER_VALIDATE_EMAIL) !== false;
+            $recipient = $isEmail
+                ? User::query()->where('email', User::normalizeEmail($identifier))->first()
+                : User::query()->where('username', User::normalizeUsername($identifier))->first();
 
-        $pendingInvitationsCount = $workspace->invitations()
-            ->whereNull('accepted_at')
-            ->where('expires_at', '>', now())
-            ->count();
+            if (! $isEmail && $recipient === null) {
+                throw ValidationException::withMessages(['email' => 'Username non trovato.']);
+            }
 
-        $occupiedSlots = $membersCount + $pendingInvitationsCount;
+            $email = $recipient?->email ?? User::normalizeEmail($identifier);
 
-        if (
-            $plan->max_members_per_workspace !== null &&
-            $occupiedSlots >= $plan->max_members_per_workspace
-        ) {
-            throw ValidationException::withMessages([
-                'workspace' => 'Hai raggiunto il limite di membri del workspace.',
-            ]);
-        }
+            if ($recipient?->is($actor)) {
+                throw ValidationException::withMessages(['email' => 'Non puoi invitare te stesso.']);
+            }
 
-        $identifier = trim($email);
-        $isEmail = filter_var($identifier, FILTER_VALIDATE_EMAIL) !== false;
-        $recipient = $isEmail
-            ? User::query()->where('email', User::normalizeEmail($identifier))->first()
-            : User::query()->where('username', User::normalizeUsername($identifier))->first();
+            if ($workspace->members()->whereRaw('LOWER(users.email) = ?', [$email])->exists()) {
+                throw ValidationException::withMessages([
+                    'email' => 'Questo utente fa giÃ  parte del workspace.',
+                ]);
+            }
 
-        if (! $isEmail && $recipient === null) {
-            throw ValidationException::withMessages(['email' => 'Username non trovato.']);
-        }
+            $invitation = WorkspaceInvitation::updateOrCreate(
+                [
+                    'workspace_id' => $workspace->id,
+                    'email' => $email,
+                ],
+                [
+                    'role' => $role,
+                    'token' => Str::random(64),
+                    'expires_at' => now()->addDays(7),
+                    'accepted_at' => null,
+                ]
+            );
 
-        $email = $recipient?->email ?? User::normalizeEmail($identifier);
+            return [$workspace, $invitation, $recipient];
+        });
 
-        if ($recipient?->is($actor)) {
-            throw ValidationException::withMessages(['email' => 'Non puoi invitare te stesso.']);
-        }
-
-        if (
-            $workspace->members()
-                ->whereRaw('LOWER(users.email) = ?', [$email])
-                ->exists()
-        ) {
-            throw ValidationException::withMessages([
-                'email' => 'Questo utente fa già parte del workspace.',
-            ]);
-        }
-
-        $invitation = WorkspaceInvitation::updateOrCreate(
-            [
-                'workspace_id' => $workspace->id,
-                'email' => $email,
-            ],
-            [
-                'role' => $role,
-                'token' => Str::random(64),
-                'expires_at' => now()->addDays(7),
-                'accepted_at' => null,
-            ]
-        );
         $this->logger->execute($actor, $workspace, 'workspace.member_invited', null, $invitation, ['email' => $email]);
 
         $invitation->loadMissing(['workspace.owner:id,name', 'workspace:id,name,owner_id,type']);
