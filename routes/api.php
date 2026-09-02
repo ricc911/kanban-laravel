@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\ActivityLogController;
+use App\Http\Controllers\Api\AiController;
 use App\Http\Controllers\Api\BoardColumnController;
 use App\Http\Controllers\Api\BoardController;
 use App\Http\Controllers\Api\CategoryController;
@@ -30,6 +31,12 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function (): void {
     Route::post('invitations/{token}/accept', [InvitationController::class, 'accept']);
     Route::get('invitations', [InvitationController::class, 'index']);
     Route::get('notifications', [NotificationController::class, 'index']);
+    Route::get('boards/{board}/ai/status', [AiController::class, 'status']);
+    Route::post('tasks/{task}/ai/generate-description', [AiController::class, 'generateDescription'])->middleware('throttle:ai-generation');
+    Route::post('boards/{board}/ai/breakdown', [AiController::class, 'breakdown'])->middleware('throttle:ai-generation');
+    Route::post('boards/{board}/ai/summary', [AiController::class, 'summary'])->middleware('throttle:ai-generation');
+    Route::post('boards/{board}/ai/analysis', [AiController::class, 'analysis'])->middleware('throttle:ai-generation');
+    Route::post('boards/{board}/ai/breakdown/apply', [AiController::class, 'applyBreakdown']);
     Route::patch('notifications/{notification}/read', [NotificationController::class, 'markRead']);
     Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::delete('invitations/{invitation}', [InvitationController::class, 'reject']);

@@ -39,6 +39,7 @@
             <button class="btn btn-category" type="button" id="openCategoryModal">+ Categoria</button>
             <button class="btn btn-primary" type="button" id="openTaskModal">+ Evento</button>
             <button class="btn" type="button" id="openActivityModal">Cronologia</button>
+            <button class="btn btn-ai" type="button" id="openAiModal">AI progetto</button>
             <select class="board-filter" id="taskAssignmentFilter" aria-label="Filtra le task per assegnatario">
                 <option value="all">Tutte</option>
                 <option value="mine">Assegnate a me</option>
@@ -64,6 +65,50 @@
             <div class="modal-body">
                 <p>Il workspace è stato eliminato dal proprietario. Questa board non è più disponibile.</p>
                 <div class="modal-actions"><a class="btn btn-primary" href="/">Torna alla dashboard</a></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="aiModal" hidden>
+        <div class="modal ai-modal" role="dialog" aria-modal="true" aria-labelledby="aiModalTitle">
+            <div class="modal-head">
+                <h2 id="aiModalTitle">AI progetto</h2>
+                <button class="close" type="button" data-close="aiModal" aria-label="Chiudi AI">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="ai-status-card">
+                    <div>
+                        <span class="ai-label">Crediti disponibili</span>
+                        <strong id="aiCredits">Caricamento...</strong>
+                    </div>
+                    <span class="hint" id="aiStatusMessage" aria-live="polite"></span>
+                </div>
+                <div class="ai-section">
+                    <label for="aiReasoning">Capacità di ragionamento</label>
+                    <select id="aiReasoning">
+                        <option value="low">Bassa</option>
+                        <option value="medium" selected>Media</option>
+                        <option value="high">Alta</option>
+                    </select>
+                    <p class="hint">Scegli il livello di approfondimento per le analisi.</p>
+                </div>
+                <div class="ai-actions">
+                    <button class="btn btn-primary" type="button" id="aiBreakdownButton">Scomponi obiettivo</button>
+                    <button class="btn" type="button" id="aiSummaryButton">Riassumi progetto</button>
+                    <button class="btn" type="button" id="aiAnalysisButton">Analizza progetto</button>
+                </div>
+                <div class="ai-feature" id="aiBreakdownFeature" hidden>
+                    <h3>Scomponi un obiettivo</h3>
+                    <label for="aiObjective">Descrivi cosa vuoi realizzare</label>
+                    <textarea id="aiObjective" rows="3" maxlength="2000" placeholder="Preparare il lancio della nuova landing page"></textarea>
+                    <label for="aiDesiredCount">Numero di task</label>
+                    <input id="aiDesiredCount" type="number" min="3" max="10" value="6">
+                    <button class="btn btn-primary" type="button" id="aiGenerateBreakdown">Genera task</button>
+                    <div class="ai-result" id="aiBreakdownResult" hidden></div>
+                </div>
+                <div class="ai-result" id="aiSummaryResult" hidden></div>
+                <div class="ai-result" id="aiAnalysisResult" hidden></div>
+                <p class="ai-message" id="aiMessage" role="status" aria-live="polite"></p>
             </div>
         </div>
     </div>
@@ -97,8 +142,12 @@
                 </div>
 
                 <div class="field">
-                    <label for="description">Descrizione</label>
+                    <div class="field-label-row">
+                        <label for="description">Descrizione</label>
+                        <button class="btn btn-ai btn-compact" type="button" id="generateDescriptionAi">Genera con AI</button>
+                    </div>
                     <textarea id="description" maxlength="500" placeholder="Scrivi una breve descrizione..."></textarea>
+                    <div class="ai-description-preview" id="aiDescriptionPreview" hidden></div>
                 </div>
 
                 <div class="field">

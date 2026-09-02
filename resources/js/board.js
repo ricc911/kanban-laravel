@@ -45,6 +45,14 @@ const state = {
     commentSubmitting: false,
     commentConfirmResolver: null,
     taskConfirmResolver: null,
+    ai: {
+        status: null,
+        statusLoadedAt: 0,
+        reasoning: 'medium',
+        descriptionReasoning: 'low',
+        loading: {},
+        breakdown: null,
+    },
 };
 
 const elements = {
@@ -124,6 +132,24 @@ const elements = {
     boardPresencePopover: document.querySelector('#boardPresencePopover'),
     boardPresenceClose: document.querySelector('#boardPresenceClose'),
     boardPresenceList: document.querySelector('#boardPresenceList'),
+    openAiModal: document.querySelector('#openAiModal'),
+    aiModal: document.querySelector('#aiModal'),
+    aiCredits: document.querySelector('#aiCredits'),
+    aiStatusMessage: document.querySelector('#aiStatusMessage'),
+    aiReasoning: document.querySelector('#aiReasoning'),
+    aiBreakdownButton: document.querySelector('#aiBreakdownButton'),
+    aiSummaryButton: document.querySelector('#aiSummaryButton'),
+    aiAnalysisButton: document.querySelector('#aiAnalysisButton'),
+    aiBreakdownFeature: document.querySelector('#aiBreakdownFeature'),
+    aiObjective: document.querySelector('#aiObjective'),
+    aiDesiredCount: document.querySelector('#aiDesiredCount'),
+    aiGenerateBreakdown: document.querySelector('#aiGenerateBreakdown'),
+    aiBreakdownResult: document.querySelector('#aiBreakdownResult'),
+    aiSummaryResult: document.querySelector('#aiSummaryResult'),
+    aiAnalysisResult: document.querySelector('#aiAnalysisResult'),
+    aiMessage: document.querySelector('#aiMessage'),
+    generateDescriptionAi: document.querySelector('#generateDescriptionAi'),
+    aiDescriptionPreview: document.querySelector('#aiDescriptionPreview'),
 };
 
 function boardId() {
@@ -463,10 +489,298 @@ async function request(url, options = {}) {
             : null;
         const error = new Error(validationMessage ?? payload?.message ?? `Errore HTTP ${response.status}.`);
         error.status = response.status;
+        error.code = payload?.code ?? null;
         throw error;
     }
 
     return payload;
+}
+
+function aiErrorMessage(error) {
+    const messages = {
+        ai_disabled: 'AI non disponibile nel tuo piano.',
+        ai_credits_exhausted: 'Hai esaurito i crediti AI disponibili per questo periodo.',
+        ai_provider_not_configured: 'Il servizio AI non è configurato.',
+        ai_provider_unavailable: 'Il servizio AI non è momentaneamente disponibile.',
+        ai_provider_invalid_response: 'Non è stato possibile generare un risultato valido.',
+        ai_provider_refused: 'La richiesta non può essere completata.',
+        ai_request_already_processed: 'Questa richiesta è già stata elaborata.',
+    };
+    if (error.code && messages[error.code]) return messages[error.code];
+    if (error.status === 429) return 'Troppe richieste AI. Riprova tra poco.';
+    if (!error.status) return 'Errore di connessione. Riprova.';
+    return 'Si è verificato un errore. Riprova.';
+}
+
+function setAiMessage(message = '', isError = false) {
+    if (!elements.aiMessage) return;
+    elements.aiMessage.textContent = message;
+    elements.aiMessage.classList.toggle('is-error', isError);
+}
+
+function updateAiUsage(usage) {
+    if (!usage || !state.ai.status) return;
+    state.ai.status.remaining_credits = Number(usage.remaining_credits ?? state.ai.status.remaining_credits);
+    state.ai.status.used_credits = Math.max(0, Number(state.ai.status.monthly_credits) - state.ai.status.remaining_credits);
+    renderAiStatus();
+}
+
+function renderAiStatus() {
+    const status = state.ai.status;
+    if (!status || !elements.aiCredits) return;
+    const remaining = Math.max(0, Number(status.remaining_credits ?? 0));
+    const monthly = Math.max(0, Number(status.monthly_credits ?? 0));
+    elements.aiCredits.textContent = remaining.toLocaleString('it-IT') + ' / ' + monthly.toLocaleString('it-IT');
+    const unavailable = !status.enabled || !status.can_use || state.workspaceRole === 'viewer';
+    [elements.aiReasoning, elements.aiBreakdownButton, elements.aiSummaryButton, elements.aiAnalysisButton, elements.aiGenerateBreakdown, document.querySelector('#aiApplyBreakdown')].forEach((control) => {
+        if (control) control.disabled = unavailable;
+    });
+    if (elements.generateDescriptionAi) elements.generateDescriptionAi.hidden = state.workspaceRole === 'viewer' || !state.editingTaskId;
+    if (!status.enabled) elements.aiStatusMessage.textContent = 'AI non disponibile nel tuo piano.';
+    else if (!status.can_use || state.workspaceRole === 'viewer') elements.aiStatusMessage.textContent = 'Funzione disponibile solo per chi può modificare.';
+    else elements.aiStatusMessage.textContent = '';
+}
+
+async function loadAiStatus(force = false) {
+    if (!force && state.ai.status && Date.now() - state.ai.statusLoadedAt < 30000) {
+        renderAiStatus();
+        return;
+    }
+    try {
+        state.ai.status = await request('/api/boards/' + encodeURIComponent(boardId()) + '/ai/status');
+        state.ai.statusLoadedAt = Date.now();
+        renderAiStatus();
+    } catch (error) {
+        setAiMessage(aiErrorMessage(error), true);
+    }
+}
+
+function setAiLoading(feature, loading) {
+    state.ai.loading[feature] = loading;
+    const controls = {
+        breakdown: elements.aiGenerateBreakdown,
+        summary: elements.aiSummaryButton,
+        analysis: elements.aiAnalysisButton,
+        description: elements.generateDescriptionAi,
+        applyBreakdown: document.querySelector('#aiApplyBreakdown'),
+    };
+    const button = controls[feature];
+    if (button) {
+        button.disabled = loading;
+        if (loading) button.dataset.originalText = button.textContent;
+        button.textContent = loading ? 'Generazione...' : (button.dataset.originalText || button.textContent);
+    }
+}
+
+async function requestAi(feature, url, payload) {
+    setAiMessage('');
+    setAiLoading(feature, true);
+    try {
+        const response = await request(url, { method: 'POST', body: JSON.stringify({ request_id: newEditingSessionId(), ...payload }) });
+        updateAiUsage(response.usage);
+        return response;
+    } catch (error) {
+        setAiMessage(aiErrorMessage(error), true);
+        throw error;
+    } finally {
+        setAiLoading(feature, false);
+        renderAiStatus();
+    }
+}
+
+function resetAiResults() {
+    state.ai.breakdown = null;
+    [elements.aiBreakdownResult, elements.aiSummaryResult, elements.aiAnalysisResult].forEach((element) => {
+        if (element) { element.hidden = true; element.replaceChildren(); }
+    });
+}
+
+function renderDescriptionPreview(text) {
+    const preview = elements.aiDescriptionPreview;
+    if (!preview) return;
+    preview.replaceChildren();
+    preview.hidden = !text;
+    if (!text) return;
+    const title = document.createElement('strong');
+    title.textContent = 'Descrizione proposta';
+    const body = document.createElement('p');
+    body.textContent = text;
+    const discard = document.createElement('button');
+    discard.className = 'btn';
+    discard.type = 'button';
+    discard.textContent = 'Scarta';
+    discard.onclick = () => renderDescriptionPreview('');
+    const apply = document.createElement('button');
+    apply.className = 'btn btn-primary';
+    apply.type = 'button';
+    apply.textContent = 'Usa descrizione';
+    apply.onclick = () => {
+        elements.taskDescription.value = text;
+        elements.taskDescription.dispatchEvent(new Event('input', { bubbles: true }));
+        renderDescriptionPreview('');
+    };
+    const actions = document.createElement('div');
+    actions.className = 'ai-result-actions';
+    actions.append(discard, apply);
+    preview.append(title, body, actions);
+}
+
+function renderAiBreakdown(tasks) {
+    const result = elements.aiBreakdownResult;
+    result.replaceChildren();
+    result.hidden = false;
+    state.ai.breakdown = tasks.map((task, index) => ({ ...task, selected: true, key: String(index) }));
+    const title = document.createElement('h3');
+    title.textContent = 'Task proposte';
+    const list = document.createElement('div');
+    list.className = 'ai-breakdown-list';
+    state.ai.breakdown.forEach((task) => {
+        const item = document.createElement('label');
+        item.className = 'ai-breakdown-item';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = true;
+        checkbox.dataset.breakdownKey = task.key;
+        checkbox.onchange = () => { task.selected = checkbox.checked; };
+        const content = document.createElement('span');
+        const taskTitle = document.createElement('strong');
+        taskTitle.textContent = task.title ?? 'Task senza titolo';
+        const description = document.createElement('small');
+        description.textContent = task.description ?? '';
+        const priority = document.createElement('small');
+        priority.textContent = task.priority ? 'Priorità: ' + ({ low: 'Bassa', medium: 'Media', high: 'Alta' }[task.priority] ?? task.priority) : 'Nessuna priorità';
+        content.append(taskTitle, description, priority);
+        item.append(checkbox, content);
+        list.append(item);
+    });
+    const columnLabel = document.createElement('label');
+    columnLabel.textContent = 'Colonna destinazione';
+    const column = document.createElement('select');
+    column.id = 'aiBreakdownColumn';
+    state.columns.forEach((boardColumn) => {
+        const option = document.createElement('option');
+        option.value = boardColumn.id;
+        option.textContent = boardColumn.name;
+        column.append(option);
+    });
+    const apply = document.createElement('button');
+    apply.className = 'btn btn-primary';
+    apply.type = 'button';
+    apply.id = 'aiApplyBreakdown';
+    apply.textContent = 'Crea task selezionate';
+    apply.onclick = () => applyAiBreakdown(column.value, apply);
+    result.append(title, list, columnLabel, column, apply);
+}
+
+function renderAiSummary(data) {
+    const result = elements.aiSummaryResult;
+    result.replaceChildren();
+    result.hidden = false;
+    const title = document.createElement('h3');
+    title.textContent = 'Riepilogo progetto';
+    const overview = document.createElement('p');
+    overview.textContent = data.overview ?? '';
+    result.append(title, overview);
+    appendAiList(result, 'Punti principali', data.highlights);
+    appendAiList(result, 'Da tenere sotto controllo', data.attention_items);
+}
+
+function renderAiAnalysis(data) {
+    const result = elements.aiAnalysisResult;
+    result.replaceChildren();
+    result.hidden = false;
+    const title = document.createElement('h3');
+    title.textContent = 'Analisi progetto';
+    const summary = document.createElement('p');
+    summary.textContent = data.executive_summary ?? '';
+    result.append(title, summary);
+    appendAiAnalysisList(result, 'Rischi', data.risks, true);
+    appendAiAnalysisList(result, 'Priorità', data.priorities, false);
+    appendAiList(result, 'Raccomandazioni', data.recommendations);
+}
+
+function appendAiList(parent, heading, values) {
+    if (!Array.isArray(values) || !values.length) return;
+    const title = document.createElement('h4');
+    title.textContent = heading;
+    const list = document.createElement('ul');
+    values.forEach((value) => {
+        const item = document.createElement('li');
+        item.textContent = value;
+        list.append(item);
+    });
+    parent.append(title, list);
+}
+
+function appendAiAnalysisList(parent, heading, values, withSeverity) {
+    if (!Array.isArray(values) || !values.length) return;
+    const title = document.createElement('h4');
+    title.textContent = heading;
+    const list = document.createElement('div');
+    list.className = 'ai-analysis-list';
+    values.forEach((value) => {
+        const item = document.createElement('article');
+        item.className = 'ai-analysis-item';
+        const itemTitle = document.createElement('strong');
+        itemTitle.textContent = (withSeverity && value.severity ? ({ low: 'Bassa', medium: 'Media', high: 'Alta' }[value.severity] + ': ') : '') + (value.title ?? '');
+        const detail = document.createElement('p');
+        detail.textContent = value.detail ?? value.reason ?? '';
+        const references = document.createElement('small');
+        const names = (value.task_ids ?? []).map((id) => findTask(id)?.title ?? '#' + id);
+        references.textContent = names.length ? 'Task collegate: ' + names.join(', ') : '';
+        item.append(itemTitle, detail, references);
+        list.append(item);
+    });
+    parent.append(title, list);
+}
+
+async function generateTaskDescriptionWithAi() {
+    if (!state.editingTaskId || state.workspaceRole === 'viewer') return;
+    try {
+        const response = await requestAi('description', '/api/tasks/' + encodeURIComponent(state.editingTaskId) + '/ai/generate-description', { reasoning_level: state.ai.descriptionReasoning });
+        renderDescriptionPreview(response.data?.description ?? '');
+    } catch (error) {
+        // The inline AI message already contains the safe user-facing error.
+    }
+}
+
+async function generateAiFeature(feature) {
+    if (state.workspaceRole === 'viewer') return;
+    try {
+        if (feature === 'breakdown') {
+            const objective = elements.aiObjective.value.trim();
+            const desiredCount = Number(elements.aiDesiredCount.value);
+            if (!objective || desiredCount < 3 || desiredCount > 10) {
+                setAiMessage('Inserisci un obiettivo e un numero di task tra 3 e 10.', true);
+                return;
+            }
+            const response = await requestAi('breakdown', '/api/boards/' + encodeURIComponent(boardId()) + '/ai/breakdown', { reasoning_level: state.ai.reasoning, objective, desired_count: desiredCount });
+            renderAiBreakdown(response.data?.tasks ?? []);
+        } else if (feature === 'summary') {
+            const response = await requestAi('summary', '/api/boards/' + encodeURIComponent(boardId()) + '/ai/summary', { reasoning_level: state.ai.reasoning });
+            renderAiSummary(response.data ?? {});
+        } else {
+            const response = await requestAi('analysis', '/api/boards/' + encodeURIComponent(boardId()) + '/ai/analysis', { reasoning_level: state.ai.reasoning });
+            renderAiAnalysis(response.data ?? {});
+        }
+    } catch (error) {
+        // Keep the board and task modal usable when AI fails.
+    }
+}
+
+async function applyAiBreakdown(columnId, button) {
+    const selected = (state.ai.breakdown ?? []).filter((task) => task.selected).map(({ title, description, priority }) => ({ title, description, priority }));
+    if (!selected.length || !columnId || state.workspaceRole === 'viewer') return;
+    setAiLoading('applyBreakdown', true);
+    try {
+        await request('/api/boards/' + encodeURIComponent(boardId()) + '/ai/breakdown/apply', { method: 'POST', body: JSON.stringify({ column_id: Number(columnId), tasks: selected }) });
+        resetAiResults();
+        setAiMessage('Task create correttamente.', false);
+    } catch (error) {
+        setAiMessage(error.message || 'Impossibile creare le task selezionate.', true);
+    } finally {
+        setAiLoading('applyBreakdown', false);
+    }
 }
 
 function refreshIcons() {
@@ -898,6 +1212,7 @@ function markTaskDeletedRemotely() {
     state.taskModalDeleted = true;
     elements.taskSubmit.disabled = true;
     elements.deleteTask.disabled = true;
+    renderDescriptionPreview('');
     renderTaskModalRealtimeState();
 }
 
@@ -1612,7 +1927,8 @@ function renderBoard() {
 
     const viewer = state.workspaceRole === 'viewer';
     document.body.classList.toggle('viewer-mode', viewer);
-    [elements.openColumnModal, elements.openCategoryModal, elements.openTaskModal].forEach((button) => { if (button) button.hidden = viewer; });
+    [elements.openColumnModal, elements.openCategoryModal, elements.openTaskModal, elements.openAiModal].forEach((button) => { if (button) button.hidden = viewer; });
+    renderAiStatus();
 
     elements.title.textContent = state.board.name ?? 'Kanban';
 
@@ -1739,6 +2055,8 @@ function resetTaskForm() {
     elements.categorySelect.value = '';
     elements.taskForm.dataset.columnId = state.columns[0]?.id ?? '';
     renderTaskAssignees(null);
+    renderDescriptionPreview('');
+    if (elements.generateDescriptionAi) elements.generateDescriptionAi.hidden = true;
 }
 
 function editTask(task) {
@@ -1754,6 +2072,8 @@ function editTask(task) {
     elements.taskForm.dataset.columnId = String(task.board_column_id);
     elements.taskModalTitle.textContent = 'Modifica evento';
     elements.deleteTask.style.display = 'inline-flex';
+    renderDescriptionPreview('');
+    if (elements.generateDescriptionAi) elements.generateDescriptionAi.hidden = state.workspaceRole === 'viewer';
     startTaskEditing(task.id);
     renderTaskAssignees(task);
     loadTaskComments(task.id);
@@ -2202,6 +2522,24 @@ elements.openTaskModal.addEventListener('click', () => {
     resetTaskForm();
     openModal('taskModal');
 });
+
+elements.openAiModal.addEventListener('click', async () => {
+    if (state.workspaceRole === 'viewer') return;
+    resetAiResults();
+    openModal('aiModal');
+    await loadAiStatus();
+});
+
+elements.aiReasoning.addEventListener('change', (event) => {
+    state.ai.reasoning = event.target.value;
+});
+elements.aiBreakdownButton.addEventListener('click', () => {
+    elements.aiBreakdownFeature.hidden = !elements.aiBreakdownFeature.hidden;
+});
+elements.aiSummaryButton.addEventListener('click', () => generateAiFeature('summary'));
+elements.aiAnalysisButton.addEventListener('click', () => generateAiFeature('analysis'));
+elements.aiGenerateBreakdown.addEventListener('click', () => generateAiFeature('breakdown'));
+elements.generateDescriptionAi.addEventListener('click', generateTaskDescriptionWithAi);
 
 elements.assignTaskMember.addEventListener('click', async () => {
     const task = findTask(state.editingTaskId);

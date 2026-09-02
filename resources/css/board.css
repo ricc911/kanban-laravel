@@ -1331,6 +1331,27 @@
         flex-basis: 100%;
         margin-left: 2.15rem;
     }
+
+    .ai-modal .modal-body {
+        padding: 14px;
+    }
+
+    .ai-status-card {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .ai-actions .btn,
+    .ai-result-actions .btn,
+    #aiApplyBreakdown,
+    #aiGenerateBreakdown {
+        width: 100%;
+    }
+
+    .field-label-row {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
 }
 
 .column-actions button {
@@ -1384,6 +1405,191 @@
 .field .has-remote-conflict {
   border-color: rgba(251, 191, 36, .72);
   box-shadow: 0 0 0 3px rgba(251, 191, 36, .10);
+}
+
+.btn-ai {
+    border-color: rgba(96, 165, 250, .48);
+    color: #cfe0ff;
+}
+
+.btn-ai:hover,
+.btn-ai:focus-visible {
+    border-color: #60a5fa;
+    background: rgba(37, 99, 235, .14);
+}
+
+.btn-compact {
+    min-height: 32px;
+    padding: 6px 9px;
+    font-size: 11px;
+}
+
+.ai-modal {
+    width: min(620px, 100%);
+}
+
+.ai-status-card,
+.ai-feature,
+.ai-result {
+    border: 1px solid #34445c;
+    border-radius: 9px;
+    background: rgba(16, 23, 34, .56);
+    padding: 14px;
+}
+
+.ai-status-card {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ai-status-card strong,
+.ai-label {
+    display: block;
+}
+
+.ai-label {
+    color: #9aa8bc;
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+
+.ai-section,
+.ai-feature,
+.ai-result {
+    display: grid;
+    gap: 9px;
+    margin-top: 14px;
+}
+
+.ai-section label,
+.ai-feature label {
+    color: #cbd2d4;
+    font-size: 13px;
+    font-weight: 750;
+}
+
+.ai-section select,
+.ai-feature input,
+.ai-feature textarea,
+.ai-feature select {
+    width: 100%;
+    border: 1px solid #34445c;
+    border-radius: 9px;
+    background: #101722;
+    color: var(--text);
+    padding: 10px 12px;
+    outline: none;
+}
+
+.ai-feature textarea {
+    resize: vertical;
+}
+
+.ai-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 14px;
+}
+
+.ai-actions .btn {
+    flex: 1 1 160px;
+}
+
+.ai-feature h3,
+.ai-result h3,
+.ai-result h4 {
+    margin: 0;
+}
+
+.ai-result p,
+.ai-result ul {
+    margin: 0;
+}
+
+.ai-result ul {
+    display: grid;
+    gap: 6px;
+    padding-left: 20px;
+}
+
+.ai-breakdown-list,
+.ai-analysis-list {
+    display: grid;
+    gap: 7px;
+}
+
+.ai-breakdown-item {
+    align-items: flex-start;
+    border: 1px solid #293b55;
+    border-radius: 8px;
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+}
+
+.ai-breakdown-item input {
+    flex: 0 0 auto;
+    margin-top: 3px;
+    width: auto;
+}
+
+.ai-breakdown-item span {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.ai-breakdown-item small,
+.ai-analysis-item small {
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.ai-analysis-item {
+    border-left: 2px solid #4b6d99;
+    display: grid;
+    gap: 4px;
+    padding-left: 10px;
+}
+
+.ai-analysis-item p {
+    overflow-wrap: anywhere;
+}
+
+.ai-message {
+    color: #a9c8ff;
+    font-size: 12px;
+    min-height: 18px;
+    margin: 12px 0 0;
+}
+
+.ai-message.is-error {
+    color: #fca5a5;
+}
+
+.ai-result-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.ai-description-preview {
+    border: 1px solid rgba(96, 165, 250, .38);
+    border-radius: 8px;
+    background: rgba(37, 99, 235, .08);
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 10px;
+}
+
+.ai-description-preview p {
+    margin: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }
 
 /* Responsive layout: horizontal overflow belongs to the Kanban board only. */
