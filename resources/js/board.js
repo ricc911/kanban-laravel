@@ -2027,7 +2027,9 @@ function openModal(id) {
 }
 
 function closeModal(id) {
-    document.getElementById(id)?.classList.remove('open');
+    const modal = document.getElementById(id);
+    modal?.classList.remove('open');
+    if (id === 'aiModal' && modal) modal.hidden = true;
     if (id === 'commentConfirmModal' && state.commentConfirmResolver) closeCommentConfirmation(false);
     if (id === 'taskConfirmModal' && state.taskConfirmResolver) closeTaskConfirmation(false);
     if (id === 'taskModal') clearTaskModalRealtimeState();
@@ -2526,7 +2528,8 @@ elements.openTaskModal.addEventListener('click', () => {
 elements.openAiModal.addEventListener('click', async () => {
     if (state.workspaceRole === 'viewer') return;
     resetAiResults();
-    openModal('aiModal');
+    elements.aiModal.hidden = false;
+    elements.aiModal.classList.add('open');
     await loadAiStatus();
 });
 

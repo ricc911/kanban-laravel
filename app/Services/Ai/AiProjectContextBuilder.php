@@ -17,6 +17,25 @@ class AiProjectContextBuilder
             ->values()
             ->all();
 
-        return ['board' => ['id' => $board->id, 'name' => $board->name, 'description' => $board->description], 'columns' => $board->columns->map(fn ($column): array => ['id' => $column->id, 'name' => $column->name, 'position' => $column->position])->values()->all(), 'categories' => $board->categories->map(fn ($category): array => ['id' => $category->id, 'name' => $category->name])->values()->all(), 'tasks' => $tasks];
+        $priority = ['high' => 0, 'medium' => 0, 'low' => 0, 'none' => 0];
+        $columns = [];
+        foreach ($board->columns as $column) {
+            $columns[$column->name] = 0;
+        }
+        foreach ($tasks as $task) {
+            $bucket = in_array($task['priority'], ['high', 'medium', 'low'], true) ? $task['priority'] : 'none';
+            $priority[$bucket]++;
+            $columns[$task['column']] = ($columns[$task['column']] ?? 0) + 1;
+        }
+        $stats = [
+            'task_count' => count($tasks),
+            'priority' => $priority,
+            'without_assignees' => count(array_filter($tasks, fn (array $task): bool => $task['assignees_count'] === 0)),
+            'without_due_date' => count(array_filter($tasks, fn (array $task): bool => $task['due_at'] === null)),
+            'with_comments' => count(array_filter($tasks, fn (array $task): bool => (int) ($task['comments_count'] ?? 0) > 0)),
+            'columns' => $columns,
+        ];
+
+        return ['board' => ['id' => $board->id, 'name' => $board->name, 'description' => $board->description], 'columns' => $board->columns->map(fn ($column): array => ['id' => $column->id, 'name' => $column->name, 'position' => $column->position])->values()->all(), 'categories' => $board->categories->map(fn ($category): array => ['id' => $category->id, 'name' => $category->name])->values()->all(), 'stats' => $stats, 'tasks' => $tasks];
     }
 }

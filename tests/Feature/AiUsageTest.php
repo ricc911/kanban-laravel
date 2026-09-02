@@ -36,7 +36,7 @@ class AiUsageTest extends TestCase
 
     public function test_status_and_success_use_the_finalized_usage(): void
     {
-        Http::fake(['*' => Http::response(['status' => 'completed', 'output' => [['content' => [['text' => json_encode(['overview' => 'ok', 'highlights' => [], 'attention_items' => []])]]]], 'usage' => ['input_tokens' => 100, 'output_tokens' => 100]], 200)]);
+        Http::fake(['*' => Http::response(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['overview' => 'ok', 'highlights' => [], 'attention_items' => []])]]]], 'usage' => ['input_tokens' => 100, 'output_tokens' => 100]], 200)]);
         $requestId = (string) Str::uuid();
 
         $this->actingAs($this->owner)->postJson("/api/boards/{$this->board->id}/ai/summary", ['request_id' => $requestId, 'reasoning_level' => 'medium'])->assertOk();
@@ -47,7 +47,7 @@ class AiUsageTest extends TestCase
 
     public function test_duplicate_request_id_is_rejected_without_second_provider_call(): void
     {
-        Http::fake(['*' => Http::response(['status' => 'completed', 'output' => [['content' => [['text' => json_encode(['overview' => 'ok', 'highlights' => [], 'attention_items' => []])]]]], 'usage' => ['input_tokens' => 1, 'output_tokens' => 1]], 200)]);
+        Http::fake(['*' => Http::response(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['overview' => 'ok', 'highlights' => [], 'attention_items' => []])]]]], 'usage' => ['input_tokens' => 1, 'output_tokens' => 1]], 200)]);
         $requestId = (string) Str::uuid();
         $payload = ['request_id' => $requestId, 'reasoning_level' => 'low'];
 
