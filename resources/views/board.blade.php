@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html lang="it">
+
 <head>
+    <link rel="manifest" href="/manifest.webmanifest">
+
+    <meta name="theme-color" content="#4f46e5">
+
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -11,6 +20,7 @@
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
     @vite(['resources/css/app.css', 'resources/js/board.js'])
 </head>
+
 <body data-board-id="{{ $board }}" data-user-id="{{ auth()->id() }}">
     <header class="topbar">
         <div class="brand">
@@ -23,13 +33,15 @@
 
         <div class="toolbar">
             <div class="board-presence" id="boardPresence" aria-label="Utenti online" hidden>
-                <span class="board-presence-status"><span class="board-presence-dot" aria-hidden="true"></span><span id="boardPresenceStatus">Online</span></span>
+                <span class="board-presence-status"><span class="board-presence-dot" aria-hidden="true"></span><span
+                        id="boardPresenceStatus">Online</span></span>
                 <div class="board-presence-users" id="boardPresenceUsers"></div>
                 <span class="board-presence-count" id="boardPresenceCount">0</span>
                 <div class="board-presence-popover" id="boardPresencePopover" hidden>
                     <div class="board-presence-popover-head">
                         <strong>Persone attive</strong>
-                        <button class="board-presence-close" id="boardPresenceClose" type="button" aria-label="Chiudi elenco persone attive">&times;</button>
+                        <button class="board-presence-close" id="boardPresenceClose" type="button"
+                            aria-label="Chiudi elenco persone attive">&times;</button>
                     </div>
                     <div id="boardPresenceList"></div>
                 </div>
@@ -54,14 +66,21 @@
 
     <div class="modal-backdrop" id="activityModal">
         <div class="modal activity-modal" role="dialog" aria-modal="true" aria-labelledby="activityModalTitle">
-            <div class="modal-head"><h2 id="activityModalTitle">Cronologia</h2><button class="close" type="button" data-close="activityModal">&times;</button></div>
-            <div class="modal-body"><div id="boardActivityList"></div></div>
+            <div class="modal-head">
+                <h2 id="activityModalTitle">Cronologia</h2><button class="close" type="button"
+                    data-close="activityModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="boardActivityList"></div>
+            </div>
         </div>
     </div>
 
     <div class="modal-backdrop" id="workspaceDeletedModal" hidden>
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="workspaceDeletedTitle">
-            <div class="modal-head"><h2 id="workspaceDeletedTitle">Workspace eliminato</h2></div>
+            <div class="modal-head">
+                <h2 id="workspaceDeletedTitle">Workspace eliminato</h2>
+            </div>
             <div class="modal-body">
                 <p>Il workspace è stato eliminato dal proprietario. Questa board non è più disponibile.</p>
                 <div class="modal-actions"><a class="btn btn-primary" href="/">Torna alla dashboard</a></div>
@@ -100,7 +119,8 @@
                 <div class="ai-feature" id="aiBreakdownFeature" hidden>
                     <h3>Scomponi un obiettivo</h3>
                     <label for="aiObjective">Descrivi cosa vuoi realizzare</label>
-                    <textarea id="aiObjective" rows="3" maxlength="2000" placeholder="Preparare il lancio della nuova landing page"></textarea>
+                    <textarea id="aiObjective" rows="3" maxlength="2000"
+                        placeholder="Preparare il lancio della nuova landing page"></textarea>
                     <label for="aiDesiredCount">Numero di task</label>
                     <input id="aiDesiredCount" type="number" min="3" max="10" value="6">
                     <button class="btn btn-primary" type="button" id="aiGenerateBreakdown">Genera task</button>
@@ -118,7 +138,9 @@
             <div>
                 <h1 class="page-title" id="currentBoardTitle">Board attivit&agrave;</h1>
                 <p class="page-note" id="boardDescription" hidden></p>
-                <p class="page-note">Gli eventi sono raggruppati per categoria. Trascina una card o l&rsquo;intero gruppo tra le colonne. <span id="saveStatus" class="save-status">Connessione al database...</span></p>
+                <p class="page-note">Gli eventi sono raggruppati per categoria. Trascina una card o l&rsquo;intero
+                    gruppo tra le colonne. <span id="saveStatus" class="save-status">Connessione al database...</span>
+                </p>
             </div>
         </div>
 
@@ -144,7 +166,8 @@
                 <div class="field">
                     <div class="field-label-row">
                         <label for="description">Descrizione</label>
-                        <button class="btn btn-ai btn-compact" type="button" id="generateDescriptionAi">Genera con AI</button>
+                        <button class="btn btn-ai btn-compact" type="button" id="generateDescriptionAi">Genera con
+                            AI</button>
                     </div>
                     <textarea id="description" maxlength="500" placeholder="Scrivi una breve descrizione..."></textarea>
                     <div class="ai-description-preview" id="aiDescriptionPreview" hidden></div>
@@ -173,7 +196,8 @@
                     <div id="taskComments" class="task-comments-list" aria-live="polite"></div>
                     <div id="taskCommentForm" class="task-comment-form" hidden>
                         <label class="sr-only" for="taskCommentBody">Nuovo commento</label>
-                        <textarea id="taskCommentBody" maxlength="5000" rows="3" placeholder="Scrivi un commento..."></textarea>
+                        <textarea id="taskCommentBody" maxlength="5000" rows="3"
+                            placeholder="Scrivi un commento..."></textarea>
                         <button type="button" class="btn btn-primary" id="taskCommentSubmit">Commenta</button>
                     </div>
                 </section>
@@ -211,13 +235,15 @@
                             <option value="#166534">Verde scuro</option>
                             <option value="">Personalizzato</option>
                         </select>
-                        <input id="colorText" value="#2563eb" maxlength="7" pattern="^#[0-9A-Fa-f]{6}$" aria-label="Colore HEX">
+                        <input id="colorText" value="#2563eb" maxlength="7" pattern="^#[0-9A-Fa-f]{6}$"
+                            aria-label="Colore HEX">
                         <input type="color" id="color" value="#2563eb" aria-label="Selettore colore">
                     </div>
                 </div>
 
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-danger" id="deleteTask" style="display:none;margin-right:auto;">Elimina</button>
+                    <button type="button" class="btn btn-danger" id="deleteTask"
+                        style="display:none;margin-right:auto;">Elimina</button>
                     <button type="button" class="btn" data-close="taskModal">Annulla</button>
                     <button type="submit" class="btn btn-primary">Salva evento</button>
                 </div>
@@ -243,8 +269,16 @@
 
     <div class="modal-backdrop" id="taskConfirmModal" hidden>
         <div class="modal comment-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="taskConfirmTitle">
-            <div class="modal-head"><h2 id="taskConfirmTitle">Elimina task</h2><button class="close" type="button" id="taskConfirmCancel" aria-label="Chiudi">&times;</button></div>
-            <div class="modal-body"><p>Sei sicuro di voler eliminare questa task?</p><div class="modal-actions"><button type="button" class="btn" id="taskConfirmCancelButton">Annulla</button><button type="button" class="btn btn-danger" id="taskConfirmOk">Elimina</button></div></div>
+            <div class="modal-head">
+                <h2 id="taskConfirmTitle">Elimina task</h2><button class="close" type="button" id="taskConfirmCancel"
+                    aria-label="Chiudi">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Sei sicuro di voler eliminare questa task?</p>
+                <div class="modal-actions"><button type="button" class="btn"
+                        id="taskConfirmCancelButton">Annulla</button><button type="button" class="btn btn-danger"
+                        id="taskConfirmOk">Elimina</button></div>
+            </div>
         </div>
     </div>
 
@@ -276,7 +310,8 @@
                             <option value="">Personalizzato</option>
                         </select>
                         <input id="categoryName" maxlength="40" required placeholder="Es. Amministrazione">
-                        <input id="categoryColorText" value="#4f6f9f" maxlength="7" pattern="^#[0-9A-Fa-f]{6}$" aria-label="Colore categoria HEX">
+                        <input id="categoryColorText" value="#4f6f9f" maxlength="7" pattern="^#[0-9A-Fa-f]{6}$"
+                            aria-label="Colore categoria HEX">
                         <input type="color" id="categoryColor" value="#4f6f9f" aria-label="Selettore colore categoria">
                     </div>
                 </div>
@@ -306,7 +341,8 @@
                 </div>
 
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-danger" id="deleteColumn" style="display:none;margin-right:auto;">Elimina</button>
+                    <button type="button" class="btn btn-danger" id="deleteColumn"
+                        style="display:none;margin-right:auto;">Elimina</button>
                     <button type="button" class="btn" data-close="columnModal">Annulla</button>
                     <button type="submit" class="btn btn-primary" id="columnSubmit">Salva colonna</button>
                 </div>
@@ -324,7 +360,8 @@
             <div class="modal-body">
                 <p id="deleteColumnMessage">La colonna contiene delle task. Scegli come procedere.</p>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-danger" id="deleteColumnWithTasks">Elimina colonna e task</button>
+                    <button type="button" class="btn btn-danger" id="deleteColumnWithTasks">Elimina colonna e
+                        task</button>
                     <button type="button" class="btn" id="moveColumnTasks">Sposta task nella prima colonna</button>
                     <button type="button" class="btn" data-close="deleteColumnModal">Annulla</button>
                 </div>
@@ -332,4 +369,5 @@
         </div>
     </div>
 </body>
+
 </html>

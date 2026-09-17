@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html lang="it">
+
 <head>
+    <link rel="manifest" href="/manifest.webmanifest">
+
+    <meta name="theme-color" content="#4f46e5">
+
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -11,6 +20,7 @@
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
     @vite(['resources/css/app.css', 'resources/js/dashboard.js'])
 </head>
+
 <body>
     <section class="auth-shell" data-auth hidden>
         <div class="auth-panel">
@@ -59,7 +69,8 @@
                         </label>
                         <label>
                             Username
-                            <input type="text" name="username" minlength="3" maxlength="30" pattern="[A-Za-z0-9_-]+" autocomplete="username" required>
+                            <input type="text" name="username" minlength="3" maxlength="30" pattern="[A-Za-z0-9_-]+"
+                                autocomplete="username" required>
                             <small>3-30 caratteri: lettere, numeri, _ e -</small>
                         </label>
                         <label>
@@ -113,7 +124,9 @@
                     <i class="icon" data-lucide="user"></i>
                     Account
                 </button>
-                <button class="btn notification-button" type="button" data-notifications aria-label="Notifiche"><i class="icon" data-lucide="bell"></i><span class="notification-badge" data-notification-count hidden>0</span></button>
+                <button class="btn notification-button" type="button" data-notifications aria-label="Notifiche"><i
+                        class="icon" data-lucide="bell"></i><span class="notification-badge" data-notification-count
+                        hidden>0</span></button>
                 <button class="btn with-icon" type="button" data-logout>
                     <i class="icon" data-lucide="log-out"></i>
                     Esci
@@ -122,26 +135,49 @@
         </header>
 
         <aside class="notifications-panel" data-notifications-panel hidden>
-            <div class="notifications-head"><div><span class="notifications-eyebrow">Aggiornamenti</span><h2>Notifiche</h2></div><button class="close" type="button" data-close-notifications>&times;</button></div>
-            <div class="notifications-body"><div class="notifications-panel-heading"><h3>Inviti workspace</h3><span>Richiedono la tua risposta</span></div><div class="notifications-list" data-notifications-list></div></div>
+            <div class="notifications-head">
+                <div><span class="notifications-eyebrow">Aggiornamenti</span>
+                    <h2>Notifiche</h2>
+                </div><button class="close" type="button" data-close-notifications>&times;</button>
+            </div>
+            <div class="notifications-body">
+                <div class="notifications-panel-heading">
+                    <h3>Inviti workspace</h3><span>Richiedono la tua risposta</span>
+                </div>
+                <div class="notifications-list" data-notifications-list></div>
+            </div>
         </aside>
 
         <div class="modal-backdrop" data-account-modal hidden>
             <div class="modal">
-                <div class="modal-head"><h2>Account</h2><button class="close" type="button" data-close-modal>&times;</button></div>
+                <div class="modal-head">
+                    <h2>Account</h2><button class="close" type="button" data-close-modal>&times;</button>
+                </div>
                 <div class="modal-body">
                     <form data-profile-form>
-                        <div class="field"><label for="accountName">Nome</label><input id="accountName" required maxlength="255" data-account-name></div>
-                        <div class="field"><label for="accountLastName">Cognome</label><input id="accountLastName" required maxlength="255" data-account-last-name></div>
-                        <div class="field"><label for="accountUsername">Username</label><input id="accountUsername" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_-]+" data-account-username></div>
+                        <div class="field"><label for="accountName">Nome</label><input id="accountName" required
+                                maxlength="255" data-account-name></div>
+                        <div class="field"><label for="accountLastName">Cognome</label><input id="accountLastName"
+                                required maxlength="255" data-account-last-name></div>
+                        <div class="field"><label for="accountUsername">Username</label><input id="accountUsername"
+                                required minlength="3" maxlength="30" pattern="[A-Za-z0-9_-]+" data-account-username>
+                        </div>
                         <div class="field"><label>Email</label><input type="email" disabled data-account-email></div>
-                        <div class="modal-actions"><button class="btn btn-primary" type="submit">Salva profilo</button></div>
+                        <div class="modal-actions"><button class="btn btn-primary" type="submit">Salva profilo</button>
+                        </div>
                     </form>
                     <form data-password-form>
-                        <div class="field"><label for="currentPassword">Password attuale</label><input id="currentPassword" type="password" required autocomplete="current-password" data-current-password></div>
-                        <div class="field"><label for="newPassword">Nuova password</label><input id="newPassword" type="password" required minlength="8" autocomplete="new-password" data-new-password></div>
-                        <div class="field"><label for="confirmPassword">Conferma password</label><input id="confirmPassword" type="password" required minlength="8" autocomplete="new-password" data-confirm-password></div>
-                        <div class="modal-actions"><button class="btn btn-primary" type="submit">Cambia password</button></div>
+                        <div class="field"><label for="currentPassword">Password attuale</label><input
+                                id="currentPassword" type="password" required autocomplete="current-password"
+                                data-current-password></div>
+                        <div class="field"><label for="newPassword">Nuova password</label><input id="newPassword"
+                                type="password" required minlength="8" autocomplete="new-password" data-new-password>
+                        </div>
+                        <div class="field"><label for="confirmPassword">Conferma password</label><input
+                                id="confirmPassword" type="password" required minlength="8" autocomplete="new-password"
+                                data-confirm-password></div>
+                        <div class="modal-actions"><button class="btn btn-primary" type="submit">Cambia
+                                password</button></div>
                     </form>
                     <p class="message" data-account-message hidden></p>
                 </div>
@@ -152,7 +188,9 @@
             <div class="page-head">
                 <h1>I tuoi progetti</h1>
                 <p class="page-note">Apri un progetto per entrare nel suo Kanban.</p>
-                <div class="page-note toast-message" data-dashboard-message hidden><span data-dashboard-message-text></span><button class="toast-close" type="button" data-close-dashboard-message aria-label="Chiudi messaggio">&times;</button></div>
+                <div class="page-note toast-message" data-dashboard-message hidden><span
+                        data-dashboard-message-text></span><button class="toast-close" type="button"
+                        data-close-dashboard-message aria-label="Chiudi messaggio">&times;</button></div>
             </div>
 
             <div class="workspace">
@@ -172,7 +210,8 @@
                     </div>
                     <div class="workspace-actions">
                         <button class="btn with-icon" type="button" data-open-activity hidden>Cronologia</button>
-                        <button class="btn with-icon" type="button" data-manage-workspace hidden>Gestisci workspace</button>
+                        <button class="btn with-icon" type="button" data-manage-workspace hidden>Gestisci
+                            workspace</button>
                         <button class="btn with-icon" type="button" data-new-folder>
                             <i class="icon" data-lucide="folder-plus"></i>
                             Nuova cartella
@@ -203,47 +242,103 @@
                 <div class="modal-body">
                     <section class="workspace-info-card">
                         <span class="workspace-panel-eyebrow">Workspace condiviso</span>
-                        <div class="workspace-info-title"><strong data-workspace-detail-name></strong><button class="icon-button" type="button" data-edit-workspace title="Modifica nome workspace" aria-label="Modifica nome workspace"><i class="icon" data-lucide="pencil"></i></button></div>
-                        <form class="workspace-name-edit" data-workspace-name-form hidden><input type="text" maxlength="255" required data-workspace-name-input><button class="btn btn-primary" type="submit">Salva</button><button class="btn" type="button" data-cancel-workspace-name>Annulla</button></form>
+                        <div class="workspace-info-title"><strong data-workspace-detail-name></strong><button
+                                class="icon-button" type="button" data-edit-workspace title="Modifica nome workspace"
+                                aria-label="Modifica nome workspace"><i class="icon" data-lucide="pencil"></i></button>
+                        </div>
+                        <form class="workspace-name-edit" data-workspace-name-form hidden><input type="text"
+                                maxlength="255" required data-workspace-name-input><button class="btn btn-primary"
+                                type="submit">Salva</button><button class="btn" type="button"
+                                data-cancel-workspace-name>Annulla</button></form>
                         <span data-workspace-detail-owner></span>
                     </section>
                     <section class="workspace-panel workspace-invite-panel">
-                        <div class="workspace-panel-heading"><h3>Invita membro</h3><span>Collabora con il tuo team</span></div>
+                        <div class="workspace-panel-heading">
+                            <h3>Invita membro</h3><span>Collabora con il tuo team</span>
+                        </div>
                         <form class="workspace-invite-form" data-invite-form>
-                        <div class="field"><label for="inviteEmail">Email del membro</label><input id="inviteEmail" type="email" required placeholder="email@esempio.it" data-invite-email></div>
-                        <div class="field"><label for="inviteRole">Ruolo</label><select id="inviteRole" data-invite-role><option value="member">Membro</option><option value="viewer">Visualizzatore</option><option value="admin">Amministratore</option></select></div>
-                        <button class="btn btn-primary" type="submit">Invia invito</button>
+                            <div class="field"><label for="inviteEmail">Email del membro</label><input id="inviteEmail"
+                                    type="email" required placeholder="email@esempio.it" data-invite-email></div>
+                            <div class="field"><label for="inviteRole">Ruolo</label><select id="inviteRole"
+                                    data-invite-role>
+                                    <option value="member">Membro</option>
+                                    <option value="viewer">Visualizzatore</option>
+                                    <option value="admin">Amministratore</option>
+                                </select></div>
+                            <button class="btn btn-primary" type="submit">Invia invito</button>
                         </form>
                     </section>
-                    <section class="workspace-panel workspace-section"><div class="workspace-panel-heading"><h3>Inviti pendenti</h3><span>In attesa di risposta</span></div><div data-pending-invitations></div></section>
-                    <section class="workspace-panel workspace-section"><div class="workspace-panel-heading"><h3>Membri</h3><span>Persone con accesso</span></div><div data-workspace-members></div></section>
+                    <section class="workspace-panel workspace-section">
+                        <div class="workspace-panel-heading">
+                            <h3>Inviti pendenti</h3><span>In attesa di risposta</span>
+                        </div>
+                        <div data-pending-invitations></div>
+                    </section>
+                    <section class="workspace-panel workspace-section">
+                        <div class="workspace-panel-heading">
+                            <h3>Membri</h3><span>Persone con accesso</span>
+                        </div>
+                        <div data-workspace-members></div>
+                    </section>
                     <section class="workspace-panel workspace-section workspace-history-panel">
-                        <button class="workspace-history-toggle" type="button" aria-expanded="false" aria-controls="workspace-history-content" data-workspace-history-toggle>
-                            <span class="workspace-history-toggle-label"><span class="workspace-panel-eyebrow">Attività</span><strong>Cronologia</strong></span>
+                        <button class="workspace-history-toggle" type="button" aria-expanded="false"
+                            aria-controls="workspace-history-content" data-workspace-history-toggle>
+                            <span class="workspace-history-toggle-label"><span
+                                    class="workspace-panel-eyebrow">Attività</span><strong>Cronologia</strong></span>
                             <i class="icon workspace-history-toggle-icon" data-lucide="chevron-right"></i>
                         </button>
-                        <div id="workspace-history-content" class="workspace-history-content" data-workspace-history-content hidden>
-                            <div class="activity-panel"><div class="activity-panel-heading"><h3>Attività recenti</h3><span>Modifiche del workspace</span></div><div data-activity-list></div><button class="btn" type="button" data-activity-more hidden>Carica altre</button></div>
+                        <div id="workspace-history-content" class="workspace-history-content"
+                            data-workspace-history-content hidden>
+                            <div class="activity-panel">
+                                <div class="activity-panel-heading">
+                                    <h3>Attività recenti</h3><span>Modifiche del workspace</span>
+                                </div>
+                                <div data-activity-list></div><button class="btn" type="button" data-activity-more
+                                    hidden>Carica altre</button>
+                            </div>
                         </div>
                     </section>
-                    <div class="workspace-danger-zone"><div><strong>Azioni workspace</strong><span>Le modifiche possono influire su tutti i membri</span></div><div class="modal-actions"><button class="btn warning-solid" type="button" data-leave-workspace>Lascia workspace</button><button class="btn danger-solid" type="button" data-delete-workspace hidden>Elimina workspace</button></div></div>
+                    <div class="workspace-danger-zone">
+                        <div><strong>Azioni workspace</strong><span>Le modifiche possono influire su tutti i
+                                membri</span></div>
+                        <div class="modal-actions"><button class="btn warning-solid" type="button"
+                                data-leave-workspace>Lascia workspace</button><button class="btn danger-solid"
+                                type="button" data-delete-workspace hidden>Elimina workspace</button></div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div class="modal-backdrop" data-activity-modal hidden>
             <div class="modal activity-modal">
-                <div class="modal-head"><div><span class="activity-modal-eyebrow">Workspace</span><h2>Cronologia</h2></div><button class="close" type="button" data-close-modal>&times;</button></div>
-                <div class="modal-body activity-modal-body"><div class="activity-panel"><div class="activity-panel-heading"><h3>Attività recenti</h3><span>Modifiche del workspace</span></div><div data-activity-list></div><button class="btn" type="button" data-activity-more hidden>Carica altre</button></div></div>
+                <div class="modal-head">
+                    <div><span class="activity-modal-eyebrow">Workspace</span>
+                        <h2>Cronologia</h2>
+                    </div><button class="close" type="button" data-close-modal>&times;</button>
+                </div>
+                <div class="modal-body activity-modal-body">
+                    <div class="activity-panel">
+                        <div class="activity-panel-heading">
+                            <h3>Attività recenti</h3><span>Modifiche del workspace</span>
+                        </div>
+                        <div data-activity-list></div><button class="btn" type="button" data-activity-more hidden>Carica
+                            altre</button>
+                    </div>
+                </div>
             </div>
         </div>
 
         <div class="modal-backdrop" data-new-workspace-modal hidden>
             <div class="modal">
-                <div class="modal-head"><h2>Nuovo workspace</h2><button class="close" type="button" data-close-modal>&times;</button></div>
+                <div class="modal-head">
+                    <h2>Nuovo workspace</h2><button class="close" type="button" data-close-modal>&times;</button>
+                </div>
                 <form class="modal-body" data-new-workspace-form>
-                    <div class="field"><label for="newWorkspaceName">Nome workspace</label><input id="newWorkspaceName" required maxlength="120" placeholder="Es. Marketing" data-new-workspace-name></div>
-                    <div class="modal-actions"><button class="btn" type="button" data-close-modal>Annulla</button><button class="btn btn-primary" type="submit">Crea workspace</button></div>
+                    <div class="field"><label for="newWorkspaceName">Nome workspace</label><input id="newWorkspaceName"
+                            required maxlength="120" placeholder="Es. Marketing" data-new-workspace-name></div>
+                    <div class="modal-actions"><button class="btn" type="button"
+                            data-close-modal>Annulla</button><button class="btn btn-primary" type="submit">Crea
+                            workspace</button></div>
                 </form>
             </div>
         </div>
@@ -269,12 +364,14 @@
                     <p class="modal-readonly-note" data-project-modal-note hidden></p>
                     <div class="field">
                         <label for="projectName">Nome progetto</label>
-                        <input id="projectName" name="name" maxlength="120" required placeholder="Es. Sito cliente Rossi" data-project-name>
+                        <input id="projectName" name="name" maxlength="120" required
+                            placeholder="Es. Sito cliente Rossi" data-project-name>
                     </div>
                     <div class="field">
                         <label for="projectColor">Colore progetto</label>
                         <div class="color-row">
-                            <select id="projectColorPreset" aria-label="Colore progetto preimpostato" data-project-color-preset>
+                            <select id="projectColorPreset" aria-label="Colore progetto preimpostato"
+                                data-project-color-preset>
                                 <option value="#ffffff">Bianco</option>
                                 <option value="#808080">Grigio</option>
                                 <option value="#000000">Nero</option>
@@ -290,7 +387,8 @@
                                 <option value="">Personalizzato</option>
                             </select>
                             <input id="projectColorText" maxlength="7" placeholder="#2563eb" data-project-color-text>
-                            <input id="projectColor" type="color" value="#2563eb" aria-label="Colore progetto" data-project-color>
+                            <input id="projectColor" type="color" value="#2563eb" aria-label="Colore progetto"
+                                data-project-color>
                         </div>
                     </div>
                     <div class="modal-actions">
@@ -314,7 +412,8 @@
                     <p class="modal-readonly-note" data-folder-modal-note hidden></p>
                     <div class="field">
                         <label for="folderName">Nome cartella</label>
-                        <input id="folderName" name="name" maxlength="120" required placeholder="Es. Clienti" data-folder-name>
+                        <input id="folderName" name="name" maxlength="120" required placeholder="Es. Clienti"
+                            data-folder-name>
                     </div>
                     <div class="field">
                         <label for="folderColor">Colore cartella</label>
@@ -335,7 +434,8 @@
                                 <option value="">Personalizzato</option>
                             </select>
                             <input id="folderColorText" maxlength="7" placeholder="#4f6f9f" data-folder-color-text>
-                            <input id="folderColor" type="color" value="#4f6f9f" aria-label="Colore cartella" data-folder-color>
+                            <input id="folderColor" type="color" value="#4f6f9f" aria-label="Colore cartella"
+                                data-folder-color>
                         </div>
                     </div>
                     <div class="modal-actions">
@@ -358,16 +458,20 @@
                 <div class="modal-body">
                     <p class="confirm-message" data-confirm-message></p>
                     <div class="modal-actions confirm-actions">
-                        <button class="btn modal-button neutral" type="button" data-confirm-result="cancel">Annulla</button>
-                        <button class="btn modal-button danger-outline with-icon" type="button" data-confirm-result="delete">
+                        <button class="btn modal-button neutral" type="button"
+                            data-confirm-result="cancel">Annulla</button>
+                        <button class="btn modal-button danger-outline with-icon" type="button"
+                            data-confirm-result="delete">
                             <i class="icon" data-lucide="trash-2"></i>
                             Elimina
                         </button>
-                        <button class="btn modal-button danger-solid with-icon" type="button" data-confirm-result="delete-kan">
+                        <button class="btn modal-button danger-solid with-icon" type="button"
+                            data-confirm-result="delete-kan">
                             <i class="icon" data-lucide="trash"></i>
                             Elimina anche Kan
                         </button>
-                        <button class="btn modal-button warning-solid with-icon" type="button" data-confirm-result="archive-kan">
+                        <button class="btn modal-button warning-solid with-icon" type="button"
+                            data-confirm-result="archive-kan">
                             <i class="icon" data-lucide="archive"></i>
                             Elimina e archivia Kan
                         </button>
@@ -377,4 +481,5 @@
         </div>
     </section>
 </body>
+
 </html>

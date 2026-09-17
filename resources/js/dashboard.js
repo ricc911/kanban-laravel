@@ -1,5 +1,6 @@
 import { subscribeToUserRealtime, subscribeToWorkspaceRealtime } from './realtime';
 import { activityDayKey, formatActivity, formatActivityDate, formatActivityDay, formatActivityDetails } from './activity-log';
+import './pwa';
 
 const DEFAULT_FOLDER_COLOR = '#4f6f9f';
 const DEFAULT_PROJECT_COLOR = '#2563eb';

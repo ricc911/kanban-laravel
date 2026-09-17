@@ -1,3 +1,5 @@
+import './pwa';
+
 const state = {
     user: null,
     workspaces: [],

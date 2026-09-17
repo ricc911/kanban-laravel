@@ -1,6 +1,7 @@
 import '../css/board.css';
 import { activityDayKey, formatActivity, formatActivityDate, formatActivityDay, formatActivityDetails } from './activity-log';
 import { subscribeToBoard, subscribeToBoardPresence, subscribeToUserRealtime } from './realtime';
+import './pwa';
 
 const DEFAULT_TASK_COLOR = '#2563eb';
 const DEFAULT_CATEGORY_COLOR = '#4f6f9f';
