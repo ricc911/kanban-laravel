@@ -17,6 +17,10 @@ class UpdateWorkspaceMemberRole
 
     public function execute(User $actor, Workspace $workspace, User $member, string $role): void
     {
+        if ($workspace->type !== 'shared') {
+            throw ValidationException::withMessages(['workspace' => Workspace::PERSONAL_SHARING_MESSAGE]);
+        }
+
         if (! $workspace->canManageMember($actor, $member)) {
             throw ValidationException::withMessages(['member' => 'Non hai il permesso di modificare questo ruolo.']);
         }

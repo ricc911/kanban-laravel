@@ -30,7 +30,7 @@ class AuthFlowTest extends TestCase
             'password_confirmation' => 'password123',
         ]);
 
-        $response->assertCreated();
+        $response->assertRedirect('/home');
 
         $user = User::where('email', 'mario@example.com')->firstOrFail();
 
@@ -66,7 +66,7 @@ class AuthFlowTest extends TestCase
         $this->postJson('/register', [
             'name' => 'Mario', 'last_name' => 'Rossi', 'username' => 'Mario_92',
             'email' => 'mario@example.com', 'password' => 'password123', 'password_confirmation' => 'password123',
-        ])->assertCreated();
+        ])->assertRedirect('/home');
 
         $this->assertDatabaseHas('users', ['username' => 'mario_92']);
         $this->postJson('/logout');

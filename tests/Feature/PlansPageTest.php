@@ -39,8 +39,6 @@ class PlansPageTest extends TestCase
         Board::create(['workspace_id' => $workspace->id, 'name' => 'Progetto due']);
         $shared = Workspace::create(['owner_id' => $user->id, 'name' => 'Team condiviso', 'type' => 'shared']);
         $shared->members()->attach($user->id, ['role' => 'owner', 'joined_at' => now()]);
-        $member = User::factory()->create();
-        $shared->members()->attach($member->id, ['role' => 'member', 'joined_at' => now()]);
         [$start, $end] = app(AiBillingPeriodResolver::class)->resolve();
         AiUsageLog::create(['request_id' => (string) Str::uuid(), 'subscription_id' => $user->subscription->id, 'workspace_id' => $workspace->id, 'user_id' => $user->id, 'feature' => 'summary', 'reasoning_level' => 'medium', 'model' => 'test', 'status' => 'completed', 'reserved_credits' => 0, 'credits_used' => 125, 'period_start' => $start, 'period_end' => $end, 'expires_at' => now(), 'completed_at' => now()]);
 

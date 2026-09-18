@@ -23,6 +23,7 @@ class InvitationController extends Controller
             ->where('email', User::normalizeEmail($request->user()->email))
             ->whereNull('accepted_at')
             ->where('expires_at', '>', now())
+            ->whereHas('workspace', fn ($query) => $query->where('type', 'shared'))
             ->with('workspace.owner:id,name,email')
             ->orderBy('expires_at')
             ->get()]);

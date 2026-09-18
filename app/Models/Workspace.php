@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Workspace extends Model
 {
+    public const PERSONAL_SHARING_MESSAGE = 'Il workspace personale non può essere condiviso.';
+
     protected $fillable = [
         'owner_id',
         'name',
@@ -23,6 +25,7 @@ class Workspace extends Model
     public function members(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'workspace_members')
+            ->using(WorkspaceMember::class)
             ->withPivot(['role', 'joined_at'])
             ->withTimestamps();
     }

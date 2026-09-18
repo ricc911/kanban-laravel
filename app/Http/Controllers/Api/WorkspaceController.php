@@ -16,9 +16,11 @@ use App\Http\Requests\UpdateWorkspaceMemberRoleRequest;
 use App\Http\Requests\UpdateWorkspaceRequest;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\Plans\PlanLimitService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 
 class WorkspaceController extends Controller
 {
@@ -39,7 +41,7 @@ class WorkspaceController extends Controller
         return response()->json(['data' => $action->execute($request->user(), $workspace, $request->validated('name'))]);
     }
 
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, PlanLimitService $planLimits): JsonResponse
     {
         $workspaces = $request->user()
             ->workspaces()
@@ -52,7 +54,12 @@ class WorkspaceController extends Controller
             $workspace->setAttribute('current_user_role', $workspace->pivot->role ?? $workspace->roleFor($request->user()));
         });
 
-        return response()->json(['data' => $workspaces]);
+        return response()->json([
+            'data' => $workspaces,
+            'meta' => [
+                'max_shared_workspaces' => $planLimits->planForOwner($request->user())->max_shared_workspaces,
+            ],
+        ]);
     }
 
     public function members(Request $request, Workspace $workspace): JsonResponse
@@ -65,6 +72,10 @@ class WorkspaceController extends Controller
     public function invitations(Request $request, Workspace $workspace): JsonResponse
     {
         Gate::authorize('view', $workspace);
+
+        if ($workspace->type !== 'shared') {
+            throw ValidationException::withMessages(['workspace' => Workspace::PERSONAL_SHARING_MESSAGE]);
+        }
 
         return response()->json(['data' => $workspace->invitations()->whereNull('accepted_at')->where('expires_at', '>', now())->latest()->get()]);
     }

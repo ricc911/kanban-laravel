@@ -9,6 +9,7 @@ use App\Models\BoardColumn;
 use App\Models\Plan;
 use App\Models\Task;
 use App\Models\User;
+use App\Models\Workspace;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -35,7 +36,8 @@ class AiGuardrailsTest extends TestCase
         $plan = Plan::where('slug', 'team')->firstOrFail();
         $plan->update(['ai_enabled' => true, 'ai_monthly_credits' => 10000]);
         $this->owner->subscription()->update(['plan_id' => $plan->id]);
-        $workspace = $this->owner->ownedWorkspaces()->firstOrFail();
+        $workspace = Workspace::create(['owner_id' => $this->owner->id, 'name' => 'AI Team', 'type' => 'shared']);
+        $workspace->members()->attach($this->owner->id, ['role' => 'owner', 'joined_at' => now()]);
         $this->board = Board::create(['workspace_id' => $workspace->id, 'name' => 'Board A', 'description' => 'Board A context']);
         $this->column = BoardColumn::create(['board_id' => $this->board->id, 'name' => 'Backlog', 'position' => 1000]);
         config(['ai.api_key' => 'test-key']);

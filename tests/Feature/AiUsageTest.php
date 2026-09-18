@@ -7,6 +7,7 @@ use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Plan;
 use App\Models\User;
+use App\Models\Workspace;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -29,7 +30,9 @@ class AiUsageTest extends TestCase
         $plan = Plan::where('slug', 'team')->firstOrFail();
         $plan->update(['ai_enabled' => true, 'ai_monthly_credits' => 100]);
         $this->owner->subscription()->update(['plan_id' => $plan->id]);
-        $this->board = Board::create(['workspace_id' => $this->owner->ownedWorkspaces()->firstOrFail()->id, 'name' => 'AI']);
+        $workspace = Workspace::create(['owner_id' => $this->owner->id, 'name' => 'AI Team', 'type' => 'shared']);
+        $workspace->members()->attach($this->owner->id, ['role' => 'owner', 'joined_at' => now()]);
+        $this->board = Board::create(['workspace_id' => $workspace->id, 'name' => 'AI']);
         BoardColumn::create(['board_id' => $this->board->id, 'name' => 'To do', 'position' => 1000]);
         config(['ai.api_key' => 'test-key']);
     }

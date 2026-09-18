@@ -36,239 +36,186 @@ class PlanLimitsTest extends TestCase
         $this->assertPlan('unlimited', 0, null, null, null, true, 1000000);
     }
 
-    public function test_free_allows_one_project_then_blocks_the_second_and_membership(): void
+    public function test_free_can_create_one_project_but_cannot_create_a_shared_workspace_through_the_api(): void
     {
         $owner = $this->userOnPlan('free');
-        $workspace = $owner->ownedWorkspaces()->firstOrFail();
-
-        $this->createBoard($owner, $workspace)->assertCreated();
-        $this->createBoard($owner, $workspace)->assertUnprocessable();
-        $this->actingAs($owner)->postJson('/api/workspaces', ['name' => 'Free owner only'])->assertCreated();
-        $shared = Workspace::where('owner_id', $owner->id)->where('type', 'shared')->latest('id')->firstOrFail();
-        $this->invite($owner, $shared, 'free-member@example.com')->assertUnprocessable();
-        $this->assertSame(0, (int) $owner->subscription->fresh()->plan->ai_monthly_credits);
-    }
-
-    public function test_pro_allows_ten_projects_but_blocks_the_eleventh_and_second_member(): void
-    {
-        $owner = $this->userOnPlan('pro');
-        $workspace = $owner->ownedWorkspaces()->firstOrFail();
-
-        for ($number = 1; $number <= 10; $number++) {
-            $this->createBoard($owner, $workspace)->assertCreated();
-        }
-
-        $this->createBoard($owner, $workspace)->assertUnprocessable();
-        $this->actingAs($owner)->postJson('/api/workspaces', ['name' => 'Pro owner only'])->assertCreated();
-        $shared = Workspace::where('owner_id', $owner->id)->where('type', 'shared')->latest('id')->firstOrFail();
-        $this->invite($owner, $shared, 'pro-member@example.com')->assertUnprocessable();
-        $this->assertSame(500, (int) $owner->subscription->fresh()->plan->ai_monthly_credits);
-    }
-
-    public function test_team_enforces_fifty_projects_three_shared_workspaces_and_ten_total_members(): void
-    {
-        $owner = $this->userOnPlan('team');
-        $workspace = $owner->ownedWorkspaces()->firstOrFail();
-
-        for ($number = 1; $number <= 50; $number++) {
-            Board::create(['workspace_id' => $workspace->id, 'name' => "Project {$number}"]);
-        }
-
-        $this->createBoard($owner, $workspace)->assertUnprocessable();
-        $shared = $this->makeEffectivelyShared($owner, 'team-shared-1@example.com');
-        $this->makeEffectivelyShared($owner, 'team-shared-2@example.com');
-        $this->makeEffectivelyShared($owner, 'team-shared-3@example.com');
-        $this->assertSame(3, app(PlanLimitService::class)->sharedWorkspaceCount($owner));
-        $this->actingAs($owner)->postJson('/api/workspaces', ['name' => 'Team 4'])->assertCreated();
-        $ownerOnly = Workspace::where('owner_id', $owner->id)->where('type', 'shared')->latest('id')->firstOrFail();
-        $this->invite($owner, $ownerOnly, 'team-fourth@example.com')->assertUnprocessable();
-        $this->assertSame(3, app(PlanLimitService::class)->sharedWorkspaceCount($owner));
-        $members = User::factory()->count(7)->create();
-        foreach ($members as $member) {
-            $shared->members()->attach($member->id, ['role' => 'member', 'joined_at' => now()]);
-        }
-
-        $tenthMember = User::factory()->create(['email' => 'team-tenth@example.com']);
-        $this->invite($owner, $shared, $tenthMember->email)->assertCreated();
-        $invitation = WorkspaceInvitation::where('email', $tenthMember->email)->firstOrFail();
-        $this->actingAs($tenthMember)->postJson("/api/invitations/{$invitation->token}/accept")->assertOk();
-        $this->assertSame(10, $shared->fresh()->members()->count());
-
-        $eleventh = User::factory()->create(['email' => 'team-eleventh@example.com']);
-        $this->invite($owner, $shared, $eleventh->email)->assertUnprocessable();
-        $this->assertSame(3000, (int) $owner->subscription->fresh()->plan->ai_monthly_credits);
-    }
-
-    public function test_team_personal_workspace_does_not_consume_shared_quota_but_cannot_accept_members(): void
-    {
-        $owner = $this->userOnPlan('team');
         $personal = $owner->ownedWorkspaces()->where('type', 'personal')->firstOrFail();
 
-        $this->makeEffectivelyShared($owner, 'shared-one@example.com');
-        $this->makeEffectivelyShared($owner, 'shared-two@example.com');
-        $this->makeEffectivelyShared($owner, 'shared-three@example.com');
-        $this->assertSame(3, app(PlanLimitService::class)->sharedWorkspaceCount($owner));
-        $ownerOnly = $this->createShared($owner);
-        $this->invite($owner, $ownerOnly, 'personal-member@example.com')->assertUnprocessable();
-        $this->assertSame(3, app(PlanLimitService::class)->sharedWorkspaceCount($owner));
-        $this->assertSame(1, $personal->fresh()->members()->count());
+        $this->createBoard($owner, $personal)->assertCreated();
+        $this->createBoard($owner, $personal)->assertUnprocessable();
+        $this->actingAs($owner)->postJson('/api/workspaces', ['name' => 'Team'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('workspace')
+            ->assertJsonPath('errors.workspace.0', 'Il tuo piano non consente di creare altri workspace condivisi.');
+
+        $this->assertSame(1, $owner->ownedWorkspaces()->where('type', 'personal')->count());
+        $this->assertSame(0, $owner->ownedWorkspaces()->where('type', 'shared')->count());
+        $this->assertSame(1, $personal->members()->count());
     }
 
-    public function test_acceptance_rechecks_member_limit_after_invitation_was_created(): void
+    public function test_pro_project_limit_is_independent_of_shared_workspace_limit(): void
     {
-        $owner = $this->userOnPlan('team');
-        $workspace = $this->createShared($owner);
-        $existing = User::factory()->count(8)->create();
-        foreach ($existing as $member) {
-            $workspace->members()->attach($member->id, ['role' => 'member', 'joined_at' => now()]);
+        $owner = $this->userOnPlan('pro');
+        $personal = $owner->ownedWorkspaces()->where('type', 'personal')->firstOrFail();
+
+        for ($number = 1; $number <= 10; $number++) {
+            $this->createBoard($owner, $personal)->assertCreated();
         }
-        $invitee = User::factory()->create(['email' => 'late-invite@example.com']);
-        $this->invite($owner, $workspace, $invitee->email)->assertCreated();
-        $workspace->members()->attach(User::factory()->create()->id, ['role' => 'member', 'joined_at' => now()]);
-        $invitation = WorkspaceInvitation::where('email', $invitee->email)->firstOrFail();
 
-        $this->actingAs($invitee)->postJson("/api/invitations/{$invitation->token}/accept")->assertUnprocessable();
-        $this->assertSame(10, $workspace->fresh()->members()->count());
-        $this->assertNull($invitation->fresh()->accepted_at);
+        $this->createBoard($owner, $personal)->assertUnprocessable();
+        $this->actingAs($owner)->postJson('/api/workspaces', ['name' => 'Team'])->assertUnprocessable();
+        $this->assertSame(10, app(PlanLimitService::class)->ownedProjectCount($owner));
+        $this->assertSame(0, app(PlanLimitService::class)->ownedSharedWorkspaceCount($owner));
     }
 
-    public function test_removing_the_last_non_owner_member_frees_a_shared_workspace_slot(): void
+    public function test_team_can_create_three_owner_only_shared_workspaces_but_not_a_fourth(): void
     {
         $owner = $this->userOnPlan('team');
-        $this->makeEffectivelyShared($owner, 'remove-first@example.com');
-        $this->makeEffectivelyShared($owner, 'remove-second@example.com');
-        $third = $this->makeEffectivelyShared($owner, 'remove-third@example.com');
-        $ownerOnly = $this->createShared($owner);
-        $member = $third->members()->where('users.id', '!=', $owner->id)->firstOrFail();
-
-        $this->actingAs($owner)->deleteJson("/api/workspaces/{$third->id}/members/{$member->id}")->assertNoContent();
-        $this->assertSame(2, app(PlanLimitService::class)->sharedWorkspaceCount($owner));
-        $this->assertSame('shared', $third->fresh()->type);
-
-        $newMember = User::factory()->create(['email' => 'remove-fourth@example.com']);
-        $this->invite($owner, $ownerOnly, $newMember->email)->assertCreated();
-        $invitation = WorkspaceInvitation::where('email', $newMember->email)->firstOrFail();
-        $this->actingAs($newMember)->postJson("/api/invitations/{$invitation->token}/accept")->assertOk();
-        $this->assertSame(3, app(PlanLimitService::class)->sharedWorkspaceCount($owner));
-        $this->assertModelExists($third);
-    }
-
-    public function test_member_leave_frees_a_shared_workspace_slot(): void
-    {
-        $owner = $this->userOnPlan('team');
-        $this->makeEffectivelyShared($owner, 'leave-first@example.com');
-        $this->makeEffectivelyShared($owner, 'leave-second@example.com');
-        $third = $this->makeEffectivelyShared($owner, 'leave-third@example.com');
-        $member = $third->members()->where('users.id', '!=', $owner->id)->firstOrFail();
-
-        $this->actingAs($member)->deleteJson("/api/workspaces/{$third->id}/leave")->assertNoContent();
-        $this->assertSame(2, app(PlanLimitService::class)->sharedWorkspaceCount($owner));
-        $this->assertSame(1, $third->fresh()->members()->count());
-    }
-
-    public function test_pending_invitation_reserves_one_shared_slot_per_owner_only_workspace(): void
-    {
-        $owner = $this->userOnPlan('team');
-        $this->makeEffectivelyShared($owner, 'pending-first@example.com');
-        $this->makeEffectivelyShared($owner, 'pending-second@example.com');
-        $pendingWorkspace = $this->createShared($owner);
-        $otherWorkspace = $this->createShared($owner);
-
-        $this->invite($owner, $pendingWorkspace, 'pending-one@example.com')->assertCreated();
-        $this->invite($owner, $pendingWorkspace, 'pending-two@example.com')->assertCreated();
-
         $limits = app(PlanLimitService::class);
-        $this->assertSame(2, $limits->sharedWorkspaceCount($owner));
-        $this->assertSame(1, $limits->reservedSharedWorkspaceCount($owner));
-        $this->invite($owner, $otherWorkspace, 'pending-other@example.com')->assertUnprocessable();
-    }
-
-    public function test_expired_invitation_releases_owner_only_shared_reservation(): void
-    {
-        $owner = $this->userOnPlan('team');
-        $this->makeEffectivelyShared($owner, 'expiry-first@example.com');
-        $this->makeEffectivelyShared($owner, 'expiry-second@example.com');
-        $pendingWorkspace = $this->createShared($owner);
-        $otherWorkspace = $this->createShared($owner);
-
-        $this->invite($owner, $pendingWorkspace, 'expired@example.com')->assertCreated();
-        WorkspaceInvitation::where('email', 'expired@example.com')->update(['expires_at' => now()->subMinute()]);
-
-        $limits = app(PlanLimitService::class);
-        $this->assertSame(0, $limits->reservedSharedWorkspaceCount($owner));
-        $this->invite($owner, $otherWorkspace, 'available@example.com')->assertCreated();
-    }
-
-    public function test_acceptance_rechecks_shared_workspace_limit_after_other_workspace_becomes_shared(): void
-    {
-        $owner = $this->userOnPlan('team');
-        $this->makeEffectivelyShared($owner, 'accept-first@example.com');
-        $this->makeEffectivelyShared($owner, 'accept-second@example.com');
-        $pendingWorkspace = $this->createShared($owner);
-        $newMember = User::factory()->create(['email' => 'accept-pending@example.com']);
-        $this->invite($owner, $pendingWorkspace, $newMember->email)->assertCreated();
-
-        $otherOwnerOnly = $this->createShared($owner);
-        $otherMember = User::factory()->create(['email' => 'accept-other@example.com']);
-        $otherOwnerOnly->members()->attach($otherMember->id, ['role' => 'member', 'joined_at' => now()]);
-        $invitation = WorkspaceInvitation::where('email', $newMember->email)->firstOrFail();
-
-        $this->actingAs($newMember)->postJson("/api/invitations/{$invitation->token}/accept")->assertUnprocessable();
-        $this->assertSame(1, $pendingWorkspace->fresh()->members()->count());
-        $this->assertNull($invitation->fresh()->accepted_at);
-    }
-
-    public function test_business_has_unlimited_projects_and_enforces_ten_shared_workspaces_and_forty_members(): void
-    {
-        $owner = $this->userOnPlan('business');
-        $workspace = $owner->ownedWorkspaces()->firstOrFail();
+        $this->assertSame(0, $limits->ownedSharedWorkspaceCount($owner));
 
         for ($number = 1; $number <= 3; $number++) {
-            Board::create(['workspace_id' => $workspace->id, 'name' => "Project {$number}"]);
+            $response = $this->actingAs($owner)->postJson('/api/workspaces', ['name' => "Team {$number}"])
+                ->assertCreated()
+                ->assertJsonPath('data.type', 'shared');
+            $workspace = Workspace::findOrFail($response->json('data.id'));
+            $this->assertSame(1, $workspace->members()->count());
+            $this->assertSame($number, $limits->ownedSharedWorkspaceCount($owner));
         }
-        $this->createBoard($owner, $workspace)->assertCreated();
 
-        for ($number = 1; $number <= 9; $number++) {
-            $this->makeEffectivelyShared($owner, "business-{$number}@example.com");
-        }
-        $shared = $this->makeEffectivelyShared($owner, 'business-tenth@example.com');
-        $this->assertSame(10, app(PlanLimitService::class)->sharedWorkspaceCount($owner));
-        $ownerOnly = $this->createShared($owner);
-        $this->assertNotNull($ownerOnly);
-        $members = User::factory()->count(38)->create();
-        foreach ($members as $member) {
-            $shared->members()->attach($member->id, ['role' => 'member', 'joined_at' => now()]);
-        }
-        $this->assertSame(40, $shared->fresh()->members()->count());
-        $this->invite($owner, $shared, 'business-extra@example.com')->assertUnprocessable();
-        $this->assertSame(10000, (int) $owner->subscription->fresh()->plan->ai_monthly_credits);
+        $this->actingAs($owner)->postJson('/api/workspaces', ['name' => 'Team 4'])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.workspace.0', 'Hai raggiunto il limite di workspace condivisi del tuo piano.');
+
+        $this->assertSame(3, $owner->ownedWorkspaces()->where('type', 'shared')->count());
+        $this->assertSame(1, $owner->ownedWorkspaces()->where('type', 'personal')->count());
+        $this->assertFalse($limits->canCreateSharedWorkspace($owner));
     }
 
-    public function test_downgrade_preserves_existing_data_and_blocks_only_new_over_limit_operations(): void
+    public function test_unlimited_plan_can_create_more_than_ten_shared_workspaces(): void
+    {
+        $owner = $this->userOnPlan('unlimited');
+
+        for ($number = 1; $number <= 11; $number++) {
+            $this->actingAs($owner)->postJson('/api/workspaces', ['name' => "Team {$number}"])->assertCreated();
+        }
+
+        $this->assertSame(11, app(PlanLimitService::class)->ownedSharedWorkspaceCount($owner));
+        $this->assertTrue(app(PlanLimitService::class)->canCreateSharedWorkspace($owner));
+        $this->assertSame(1, $owner->ownedWorkspaces()->where('type', 'personal')->count());
+    }
+
+    public function test_business_can_create_ten_shared_workspaces_but_not_an_eleventh(): void
     {
         $owner = $this->userOnPlan('business');
-        $workspace = $owner->ownedWorkspaces()->firstOrFail();
-        for ($number = 1; $number <= 12; $number++) {
-            Board::create(['workspace_id' => $workspace->id, 'name' => "Existing {$number}"]);
-        }
-        $owner->subscription->update(['plan_id' => Plan::where('slug', 'pro')->value('id')]);
 
-        $this->assertSame(12, $workspace->fresh()->boards()->count());
-        $this->actingAs($owner)->getJson("/api/workspaces/{$workspace->id}/boards")->assertOk()->assertJsonCount(12, 'data');
-        $this->createBoard($owner, $workspace)->assertUnprocessable();
+        for ($number = 1; $number <= 10; $number++) {
+            $this->actingAs($owner)->postJson('/api/workspaces', ['name' => "Team {$number}"])->assertCreated();
+        }
+
+        $this->actingAs($owner)->postJson('/api/workspaces', ['name' => 'Team 11'])->assertUnprocessable();
+
+        $this->assertSame(10, app(PlanLimitService::class)->ownedSharedWorkspaceCount($owner));
     }
 
-    public function test_downgrade_preserves_members_but_blocks_new_invitation(): void
+    public function test_existing_over_quota_shared_workspace_can_still_invite_with_available_member_slots(): void
+    {
+        $owner = $this->userOnPlan('team');
+        for ($number = 1; $number <= 3; $number++) {
+            $this->createShared($owner);
+        }
+        $legacy = Workspace::create(['owner_id' => $owner->id, 'name' => 'Legacy', 'type' => 'shared']);
+        $legacy->members()->attach($owner->id, ['role' => 'owner', 'joined_at' => now()]);
+        $invitee = User::factory()->create(['email' => 'legacy@example.com']);
+
+        $this->invite($owner, $legacy, $invitee->email)->assertCreated();
+        $invitation = WorkspaceInvitation::where('workspace_id', $legacy->id)->firstOrFail();
+        $this->actingAs($invitee)->postJson("/api/invitations/{$invitation->token}/accept")->assertOk();
+        $this->actingAs($owner)->postJson('/api/workspaces', ['name' => 'Blocked'])->assertUnprocessable();
+
+        $this->assertSame(4, app(PlanLimitService::class)->ownedSharedWorkspaceCount($owner));
+        $this->assertSame(2, $legacy->members()->count());
+    }
+
+    public function test_member_count_does_not_change_shared_workspace_count(): void
     {
         $owner = $this->userOnPlan('team');
         $workspace = $this->createShared($owner);
         $member = User::factory()->create();
+
+        $this->assertSame(1, app(PlanLimitService::class)->ownedSharedWorkspaceCount($owner));
         $workspace->members()->attach($member->id, ['role' => 'member', 'joined_at' => now()]);
+        $this->assertSame(1, app(PlanLimitService::class)->ownedSharedWorkspaceCount($owner));
+        $workspace->members()->detach($member->id);
+        $this->assertSame(1, app(PlanLimitService::class)->ownedSharedWorkspaceCount($owner));
+    }
+
+    public function test_shared_workspace_member_limit_still_applies_to_invitations_and_acceptance(): void
+    {
+        $owner = $this->userOnPlan('team');
+        $owner->subscription->plan->update(['max_members_per_workspace' => 2]);
+        $workspace = $this->createShared($owner);
+        $invitee = User::factory()->create(['email' => 'first@example.com']);
+
+        $this->invite($owner, $workspace, $invitee->email)->assertCreated();
+        $this->invite($owner, $workspace, 'second@example.com')->assertUnprocessable();
+        $invitation = WorkspaceInvitation::where('workspace_id', $workspace->id)->firstOrFail();
+        $this->actingAs($invitee)->postJson("/api/invitations/{$invitation->token}/accept")->assertOk();
+        $this->assertSame(2, $workspace->members()->count());
+
+        $this->invite($owner, $workspace, 'third@example.com')->assertUnprocessable();
+        $this->assertSame(1, app(PlanLimitService::class)->ownedSharedWorkspaceCount($owner));
+    }
+
+    public function test_invitation_acceptance_rechecks_member_limit(): void
+    {
+        $owner = $this->userOnPlan('team');
+        $owner->subscription->plan->update(['max_members_per_workspace' => 2]);
+        $workspace = $this->createShared($owner);
+        $invitee = User::factory()->create(['email' => 'late@example.com']);
+        $this->invite($owner, $workspace, $invitee->email)->assertCreated();
+        $workspace->members()->attach(User::factory()->create()->id, ['role' => 'member', 'joined_at' => now()]);
+        $invitation = WorkspaceInvitation::where('workspace_id', $workspace->id)->firstOrFail();
+
+        $this->actingAs($invitee)->postJson("/api/invitations/{$invitation->token}/accept")->assertUnprocessable();
+
+        $this->assertSame(2, $workspace->members()->count());
+        $this->assertNull($invitation->fresh()->accepted_at);
+    }
+
+    public function test_existing_shared_workspaces_survive_downgrade_but_new_ones_are_blocked(): void
+    {
+        $owner = $this->userOnPlan('team');
+        $existing = $this->createShared($owner);
         $owner->subscription->update(['plan_id' => Plan::where('slug', 'free')->value('id')]);
 
-        $this->assertSame(2, $workspace->fresh()->members()->count());
-        $this->invite($owner, $workspace, 'new-after-downgrade@example.com')->assertUnprocessable();
-        $this->assertTrue($workspace->fresh()->hasMember($member));
+        $this->actingAs($owner)->postJson('/api/workspaces', ['name' => 'New'])
+            ->assertUnprocessable();
+
+        $this->assertModelExists($existing);
+        $this->assertSame(1, app(PlanLimitService::class)->ownedSharedWorkspaceCount($owner));
+        $this->assertSame(1, $existing->members()->count());
+    }
+
+    public function test_downgrade_preserves_projects_and_members_but_blocks_new_over_limit_operations(): void
+    {
+        $owner = $this->userOnPlan('team');
+        $personal = $owner->ownedWorkspaces()->where('type', 'personal')->firstOrFail();
+        $shared = $this->createShared($owner);
+        $member = User::factory()->create();
+        $shared->members()->attach($member->id, ['role' => 'member', 'joined_at' => now()]);
+        for ($number = 1; $number <= 12; $number++) {
+            Board::create(['workspace_id' => $personal->id, 'name' => "Existing {$number}"]);
+        }
+        $owner->subscription->update(['plan_id' => Plan::where('slug', 'free')->value('id')]);
+
+        $this->actingAs($owner)->getJson("/api/workspaces/{$personal->id}/boards")
+            ->assertOk()->assertJsonCount(12, 'data');
+        $this->createBoard($owner, $personal)->assertUnprocessable();
+        $this->invite($owner, $shared, 'new@example.com')->assertUnprocessable();
+
+        $this->assertSame(12, $personal->boards()->count());
+        $this->assertTrue($shared->hasMember($member));
     }
 
     private function userOnPlan(string $slug): User
@@ -281,20 +228,9 @@ class PlanLimitsTest extends TestCase
 
     private function createShared(User $owner): Workspace
     {
-        $this->actingAs($owner)->postJson('/api/workspaces', ['name' => 'Shared'])->assertCreated();
+        $response = $this->actingAs($owner)->postJson('/api/workspaces', ['name' => 'Shared'])->assertCreated();
 
-        return Workspace::where('owner_id', $owner->id)->where('type', 'shared')->latest('id')->firstOrFail();
-    }
-
-    private function makeEffectivelyShared(User $owner, string $email): Workspace
-    {
-        $workspace = $this->createShared($owner);
-        $invitee = User::factory()->create(['email' => $email]);
-        $this->invite($owner, $workspace, $invitee->email)->assertCreated();
-        $invitation = WorkspaceInvitation::where('workspace_id', $workspace->id)->where('email', $invitee->email)->firstOrFail();
-        $this->actingAs($invitee)->postJson("/api/invitations/{$invitation->token}/accept")->assertOk();
-
-        return $workspace->fresh();
+        return Workspace::findOrFail($response->json('data.id'));
     }
 
     private function createBoard(User $owner, Workspace $workspace): TestResponse

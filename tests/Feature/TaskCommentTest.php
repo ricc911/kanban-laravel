@@ -122,7 +122,8 @@ class TaskCommentTest extends TestCase
     private function taskContext(): array
     {
         $owner = User::factory()->create(['name' => 'Mario', 'last_name' => 'Rossi', 'username' => 'mario']);
-        $workspace = $owner->ownedWorkspaces()->where('type', 'personal')->firstOrFail();
+        $workspace = Workspace::create(['owner_id' => $owner->id, 'name' => 'Team', 'type' => 'shared']);
+        $workspace->members()->attach($owner->id, ['role' => 'owner', 'joined_at' => now()]);
         $board = Board::create(['workspace_id' => $workspace->id, 'name' => 'Board']);
         $column = BoardColumn::create(['board_id' => $board->id, 'name' => 'Da fare', 'position' => 1000]);
         $task = Task::create(['board_id' => $board->id, 'board_column_id' => $column->id, 'title' => 'Task', 'position' => 1000]);

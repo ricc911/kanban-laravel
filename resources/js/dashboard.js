@@ -9,6 +9,7 @@ const STORAGE_WORKSPACE_KEY = 'kanban.dashboard.workspace';
 const state = {
     user: null,
     workspaces: [],
+    sharedWorkspaceLimit: 0,
     workspaceId: null,
     folders: [],
     boards: [],
@@ -647,6 +648,11 @@ function renderWorkspaceOptions() {
     });
 
     elements.workspaceSelect.hidden = state.workspaces.length <= 1;
+    const ownedSharedCount = state.workspaces.filter((workspace) =>
+        workspace.type === 'shared' && Number(workspace.owner_id) === Number(state.user?.id)
+    ).length;
+    elements.newWorkspaceButton.hidden = state.sharedWorkspaceLimit !== null
+        && ownedSharedCount >= state.sharedWorkspaceLimit;
     const workspace = activeWorkspace();
     document.body.classList.toggle('viewer-mode', workspace?.current_user_role === 'viewer');
     elements.manageWorkspaceButton.hidden = workspace?.type !== 'shared';
@@ -908,6 +914,7 @@ async function loadAuthenticatedUser() {
 
     const workspaceResponse = await request('/api/workspaces');
     state.workspaces = (workspaceResponse.data ?? []).map(normalizeWorkspace);
+    state.sharedWorkspaceLimit = workspaceResponse.meta.max_shared_workspaces;
 
     const storedWorkspace = Number(localStorage.getItem(STORAGE_WORKSPACE_KEY));
     const fallbackWorkspace = state.workspaces[0]?.id ?? null;
@@ -925,6 +932,7 @@ async function loadAuthenticatedUser() {
 async function loadWorkspaces() {
     const response = await request('/api/workspaces');
     state.workspaces = (response.data ?? []).map(normalizeWorkspace);
+    state.sharedWorkspaceLimit = response.meta.max_shared_workspaces;
 
     if (!state.workspaces.some((workspace) => Number(workspace.id) === Number(state.workspaceId))) {
         state.workspaceId = state.workspaces[0]?.id ?? null;
@@ -938,6 +946,7 @@ function setGuestView() {
     clearRealtimeSubscriptions();
     state.user = null;
     state.workspaces = [];
+    state.sharedWorkspaceLimit = 0;
     state.workspaceId = null;
     state.folders = [];
     state.boards = [];
@@ -1370,7 +1379,7 @@ async function loadWorkspaceManagement() {
     elements.deleteWorkspace.hidden = workspace.type !== 'shared' || Number(workspace.owner_id) !== Number(state.user?.id);
     elements.leaveWorkspace.hidden = Number(workspace.owner_id) === Number(state.user?.id);
     let currentUserRole = workspace.current_user_role;
-    const canManageMembers = ['owner', 'admin'].includes(currentUserRole);
+    const canManageMembers = workspace.type === 'shared' && ['owner', 'admin'].includes(currentUserRole);
     elements.inviteForm.closest('.workspace-panel').hidden = !canManageMembers;
     elements.pendingInvitations.closest('.workspace-panel').hidden = !canManageMembers;
     elements.inviteForm.hidden = !canManageMembers;
@@ -1387,7 +1396,7 @@ async function loadWorkspaceManagement() {
     currentUserRole = Number(workspace.owner_id) === Number(state.user?.id)
         ? 'owner'
         : currentMember?.pivot?.role ?? currentUserRole;
-    const canManageMembersAfterLoad = ['owner', 'admin'].includes(currentUserRole);
+    const canManageMembersAfterLoad = workspace.type === 'shared' && ['owner', 'admin'].includes(currentUserRole);
     elements.inviteForm.closest('.workspace-panel').hidden = !canManageMembersAfterLoad;
     elements.pendingInvitations.closest('.workspace-panel').hidden = !canManageMembersAfterLoad;
     elements.inviteForm.hidden = !canManageMembersAfterLoad;

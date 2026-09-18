@@ -7,6 +7,7 @@ use App\Models\Board;
 use App\Models\BoardColumn;
 use App\Models\Task;
 use App\Models\User;
+use App\Models\Workspace;
 use App\Notifications\TaskAssignedNotification;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -47,7 +48,8 @@ class InternalNotificationTest extends TestCase
     {
         $owner = User::factory()->create();
         $member = User::factory()->create();
-        $workspace = $owner->ownedWorkspaces()->where('type', 'personal')->firstOrFail();
+        $workspace = Workspace::create(['owner_id' => $owner->id, 'name' => 'Team', 'type' => 'shared']);
+        $workspace->members()->attach($owner->id, ['role' => 'owner', 'joined_at' => now()]);
         $workspace->members()->attach($member->id, ['role' => 'member', 'joined_at' => now()]);
         $board = Board::create(['workspace_id' => $workspace->id, 'name' => 'Board']);
         $column = BoardColumn::create(['board_id' => $board->id, 'name' => 'Todo', 'position' => 1000]);

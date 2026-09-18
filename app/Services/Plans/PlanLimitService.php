@@ -25,14 +25,16 @@ class PlanLimitService
         return $plan->max_projects === null || $this->ownedProjectCount($workspace->owner) < $plan->max_projects;
     }
 
-    public function sharedWorkspaceCount(User $owner): int
+    public function ownedSharedWorkspaceCount(User $owner): int
     {
-        return $this->sharedWorkspaceUsage($owner)['actual'];
+        return (int) $owner->ownedWorkspaces()->where('type', 'shared')->count();
     }
 
-    public function reservedSharedWorkspaceCount(User $owner): int
+    public function canCreateSharedWorkspace(User $owner): bool
     {
-        return $this->sharedWorkspaceUsage($owner)['reserved'];
+        $limit = $this->planForOwner($owner)->max_shared_workspaces;
+
+        return $limit === null || $this->ownedSharedWorkspaceCount($owner) < $limit;
     }
 
     public function memberCount(Workspace $workspace): int
@@ -50,65 +52,24 @@ class PlanLimitService
 
     public function canInviteMember(Workspace $workspace): bool
     {
-        $plan = $this->planForOwner($workspace->owner);
+        if ($workspace->type !== 'shared') {
+            return false;
+        }
+
+        $limit = $this->planForOwner($workspace->owner)->max_members_per_workspace;
         $occupiedSlots = $this->memberCount($workspace) + $this->pendingInvitationCount($workspace);
 
-        return ($plan->max_members_per_workspace === null || $occupiedSlots < $plan->max_members_per_workspace)
-            && $this->canShareWorkspace($workspace);
+        return $limit === null || $occupiedSlots < $limit;
     }
 
     public function canAcceptMember(Workspace $workspace): bool
     {
-        $plan = $this->planForOwner($workspace->owner);
-
-        return ($plan->max_members_per_workspace === null || $this->memberCount($workspace) < $plan->max_members_per_workspace)
-            && $this->canShareWorkspace($workspace);
-    }
-
-    public function canShareWorkspace(Workspace $workspace): bool
-    {
-        if ($this->memberCount($workspace) > 1) {
-            return true;
+        if ($workspace->type !== 'shared') {
+            return false;
         }
 
-        $plan = $this->planForOwner($workspace->owner);
-        if ($plan->max_shared_workspaces === null) {
-            return true;
-        }
+        $limit = $this->planForOwner($workspace->owner)->max_members_per_workspace;
 
-        $usage = $this->sharedWorkspaceUsage($workspace->owner);
-        $currentWorkspaceReserved = $this->workspaceHasActiveInvitation($workspace);
-        $reservedWithoutCurrent = $usage['reserved'] - ($currentWorkspaceReserved ? 1 : 0);
-
-        return $plan->max_shared_workspaces > $usage['actual'] + $reservedWithoutCurrent;
-    }
-
-    /**
-     * @return array{actual: int, reserved: int}
-     */
-    private function sharedWorkspaceUsage(User $owner): array
-    {
-        $workspaces = $owner->ownedWorkspaces()->withCount([
-            'members',
-            'invitations as active_invitations_count' => fn ($query) => $query
-                ->whereNull('accepted_at')
-                ->where('expires_at', '>', now()),
-        ])->get();
-
-        return [
-            'actual' => $workspaces->where('members_count', '>', 1)->count(),
-            'reserved' => $workspaces
-                ->where('members_count', 1)
-                ->where('active_invitations_count', '>', 0)
-                ->count(),
-        ];
-    }
-
-    private function workspaceHasActiveInvitation(Workspace $workspace): bool
-    {
-        return $workspace->invitations()
-            ->whereNull('accepted_at')
-            ->where('expires_at', '>', now())
-            ->exists();
+        return $limit === null || $this->memberCount($workspace) < $limit;
     }
 }

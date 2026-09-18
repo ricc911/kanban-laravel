@@ -45,10 +45,22 @@ class AcceptWorkspaceInvitation
 
         $workspace = $invitation->workspace;
 
+        if ($workspace->type !== 'shared') {
+            throw ValidationException::withMessages([
+                'workspace' => Workspace::PERSONAL_SHARING_MESSAGE,
+            ]);
+        }
+
         DB::transaction(function () use ($workspace, $user, $invitation): void {
             $owner = User::query()->lockForUpdate()->findOrFail($workspace->owner_id);
             $workspace = Workspace::query()->lockForUpdate()->findOrFail($workspace->id);
             $workspace->setRelation('owner', $owner);
+
+            if ($workspace->type !== 'shared') {
+                throw ValidationException::withMessages([
+                    'workspace' => Workspace::PERSONAL_SHARING_MESSAGE,
+                ]);
+            }
 
             if (! $this->planLimits->canAcceptMember($workspace)) {
                 throw ValidationException::withMessages([

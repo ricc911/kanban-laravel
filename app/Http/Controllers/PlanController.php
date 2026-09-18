@@ -33,7 +33,7 @@ class PlanController extends Controller
             'catalog' => $catalog,
             'usage' => [
                 'projects' => ['used' => $planLimits->ownedProjectCount($user), 'limit' => $currentPlan->max_projects],
-                'shared_workspaces' => ['used' => $planLimits->sharedWorkspaceCount($user), 'limit' => $currentPlan->max_shared_workspaces],
+                'shared_workspaces' => ['used' => $planLimits->ownedSharedWorkspaceCount($user), 'limit' => $currentPlan->max_shared_workspaces],
                 'ai' => $aiStatus,
             ],
         ]);

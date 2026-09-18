@@ -20,26 +20,26 @@ class WorkspaceManagementTest extends TestCase
         $this->seed(PlanSeeder::class);
     }
 
-    public function test_free_can_create_owner_only_workspace_but_cannot_add_a_member(): void
+    public function test_free_cannot_create_shared_workspace_but_team_can(): void
     {
         $free = User::factory()->create();
-        $response = $this->actingAs($free)->postJson('/api/workspaces', ['name' => 'No'])->assertCreated();
-        $workspace = Workspace::findOrFail($response->json('data.id'));
-        $this->actingAs($free)->postJson("/api/workspaces/{$workspace->id}/invitations", ['email' => 'free-member@example.com'])->assertUnprocessable();
+        $this->actingAs($free)->postJson('/api/workspaces', ['name' => 'No'])->assertUnprocessable();
+        $this->assertSame(0, $free->ownedWorkspaces()->where('type', 'shared')->count());
 
         $team = $this->teamUser();
         $this->actingAs($team)->postJson('/api/workspaces', ['name' => 'Team'])->assertCreated();
         $this->assertDatabaseHas('workspaces', ['name' => 'Team', 'type' => 'shared']);
     }
 
-    public function test_shared_workspace_limit_is_enforced(): void
+    public function test_shared_workspace_limit_is_enforced_before_insert(): void
     {
         $owner = $this->teamUser();
         for ($i = 0; $i < 3; $i++) {
-            $workspace = $this->createShared($owner);
-            $workspace->members()->attach(User::factory()->create()->id, ['role' => 'member', 'joined_at' => now()]);
+            $this->actingAs($owner)->postJson('/api/workspaces', ['name' => "Team {$i}"])->assertCreated();
         }
-        $this->actingAs($owner)->postJson('/api/workspaces', ['name' => 'Owner only'])->assertCreated();
+
+        $this->actingAs($owner)->postJson('/api/workspaces', ['name' => 'Fourth'])->assertUnprocessable();
+        $this->assertSame(3, $owner->ownedWorkspaces()->where('type', 'shared')->count());
     }
 
     public function test_owner_can_invite_but_member_cannot_and_member_limit_is_enforced(): void

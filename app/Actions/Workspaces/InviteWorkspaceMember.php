@@ -23,6 +23,12 @@ class InviteWorkspaceMember
         string $email,
         string $role = 'member'
     ): WorkspaceInvitation {
+        if ($workspace->type !== 'shared') {
+            throw ValidationException::withMessages([
+                'workspace' => Workspace::PERSONAL_SHARING_MESSAGE,
+            ]);
+        }
+
         if (! $workspace->canManageMembers($actor)) {
             throw ValidationException::withMessages([
                 'workspace' => 'Non hai il permesso di invitare membri.',
@@ -37,6 +43,12 @@ class InviteWorkspaceMember
             $owner = User::query()->lockForUpdate()->findOrFail($workspace->owner_id);
             $workspace = Workspace::query()->lockForUpdate()->findOrFail($workspace->id);
             $workspace->setRelation('owner', $owner);
+
+            if ($workspace->type !== 'shared') {
+                throw ValidationException::withMessages([
+                    'workspace' => Workspace::PERSONAL_SHARING_MESSAGE,
+                ]);
+            }
 
             if (! $this->planLimits->canInviteMember($workspace)) {
                 throw ValidationException::withMessages([

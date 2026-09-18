@@ -6,18 +6,32 @@ use App\Actions\Activity\LogActivity;
 use App\Events\UserRealtimeEvent;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\Plans\PlanLimitService;
 use App\Support\RealtimePayload;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CreateSharedWorkspace
 {
-    public function __construct(private LogActivity $logger) {}
+    public function __construct(private LogActivity $logger, private PlanLimitService $planLimits) {}
 
     public function execute(User $user, string $name): Workspace
     {
         return DB::transaction(function () use ($user, $name) {
+            $owner = User::query()->lockForUpdate()->findOrFail($user->id);
+
+            if (! $this->planLimits->canCreateSharedWorkspace($owner)) {
+                $limit = $this->planLimits->planForOwner($owner)->max_shared_workspaces;
+
+                throw ValidationException::withMessages([
+                    'workspace' => $limit === 0
+                        ? 'Il tuo piano non consente di creare altri workspace condivisi.'
+                        : 'Hai raggiunto il limite di workspace condivisi del tuo piano.',
+                ]);
+            }
+
             $workspace = Workspace::create([
-                'owner_id' => $user->id,
+                'owner_id' => $owner->id,
                 'name' => $name,
                 'type' => 'shared',
             ]);
