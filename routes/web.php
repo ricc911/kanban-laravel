@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', PublicHomeController::class)->name('public.home');
 Route::view('/dashboard', 'dashboard')->name('dashboard');
-Route::view('/home', 'dashboard')->name('home');
+Route::view('/home', '/dashboard');
 Route::get('/plans', [PlanController::class, 'index'])->middleware('auth')->name('plans');
 Route::get('/pricing', PublicPricingController::class)->name('pricing');
 Route::view('/login', 'auth.login')->name('login');
