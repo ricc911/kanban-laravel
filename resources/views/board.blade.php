@@ -46,7 +46,7 @@
                     <div id="boardPresenceList"></div>
                 </div>
             </div>
-            <a class="btn home-link" data-back-to-projects href="/">&larr; Progetti</a>
+            <a class="btn home-link" data-back-to-projects href="{{ route('dashboard') }}">&larr; Progetti</a>
             <button class="btn" type="button" id="openColumnModal">+ Colonna</button>
             <button class="btn btn-category" type="button" id="openCategoryModal">+ Categoria</button>
             <button class="btn btn-primary" type="button" id="openTaskModal">+ Evento</button>
@@ -83,7 +83,7 @@
             </div>
             <div class="modal-body">
                 <p>Il workspace è stato eliminato dal proprietario. Questa board non è più disponibile.</p>
-                <div class="modal-actions"><a class="btn btn-primary" href="/">Torna alla dashboard</a></div>
+                <div class="modal-actions"><a class="btn btn-primary" href="{{ route('dashboard') }}">Torna alla dashboard</a></div>
             </div>
         </div>
     </div>

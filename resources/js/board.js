@@ -1416,11 +1416,11 @@ function redirectToPersonalWorkspace() {
         .then((response) => {
             const personalWorkspace = (response.data ?? []).find((workspace) => workspace.type === 'personal');
             const destination = personalWorkspace?.id
-                ? `/?workspace_id=${encodeURIComponent(personalWorkspace.id)}`
-                : '/';
+                ? `/dashboard?workspace_id=${encodeURIComponent(personalWorkspace.id)}`
+                : '/dashboard';
             window.location.assign(destination);
         })
-        .catch(() => window.location.assign('/'));
+        .catch(() => window.location.assign('/dashboard'));
 }
 
 function handleRemoteBoardAccessRemoved(payload, redirect = false) {
@@ -2778,7 +2778,7 @@ const backParams = new URLSearchParams();
     if (currentParams.has(key)) backParams.set(key, currentParams.get(key));
 });
 if (backParams.toString()) {
-    elements.backToProjects.href = `/?${backParams.toString()}`;
+    elements.backToProjects.href = `/dashboard?${backParams.toString()}`;
 }
 
 bindColumnDropEvents();
