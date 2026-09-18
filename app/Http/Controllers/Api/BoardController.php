@@ -39,7 +39,16 @@ class BoardController extends Controller
 
     public function update(UpdateBoardRequest $request, Board $board, UpdateBoard $action): JsonResponse
     {
-        return response()->json(['data' => $action->execute($request->user(), $board, $request->validated('name'), $request->validated('description'), $request->validated('color'))]);
+        $data = $request->validated();
+
+        return response()->json(['data' => $action->execute(
+            $request->user(),
+            $board,
+            $data['name'] ?? $board->name,
+            $data['description'] ?? null,
+            $data['color'] ?? null,
+            array_keys($data),
+        )]);
     }
 
     public function move(MoveBoardRequest $request, Board $board, MoveBoard $action): JsonResponse

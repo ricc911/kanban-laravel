@@ -142,6 +142,32 @@ class AiProjectFeaturesTest extends TestCase
         $this->assertDatabaseHas('ai_usage_logs', ['status' => 'failed', 'reserved_credits' => 0, 'credits_used' => 0]);
     }
 
+    public function test_breakdown_preserves_provider_error_status(): void
+    {
+        Http::fake(['*' => Http::response(['error' => ['message' => 'temporary']], 503)]);
+
+        $this->actingAs($this->owner)->postJson("/api/boards/{$this->board->id}/ai/breakdown", [
+            'request_id' => (string) Str::uuid(),
+            'reasoning_level' => 'low',
+            'objective' => 'Organizzare il progetto',
+            'desired_count' => 3,
+        ])->assertStatus(502)->assertJsonPath('code', 'ai_provider_unavailable')->assertJsonMissingPath('data');
+
+        $this->assertDatabaseHas('ai_usage_logs', ['feature' => 'breakdown', 'status' => 'failed', 'credits_used' => 0]);
+    }
+
+    public function test_analysis_preserves_provider_error_status(): void
+    {
+        Http::fake(['*' => Http::response(['error' => ['message' => 'temporary']], 503)]);
+
+        $this->actingAs($this->owner)->postJson("/api/boards/{$this->board->id}/ai/analysis", [
+            'request_id' => (string) Str::uuid(),
+            'reasoning_level' => 'low',
+        ])->assertStatus(502)->assertJsonPath('code', 'ai_provider_unavailable')->assertJsonMissingPath('data');
+
+        $this->assertDatabaseHas('ai_usage_logs', ['feature' => 'analysis', 'status' => 'failed', 'credits_used' => 0]);
+    }
+
     public function test_missing_output_text_returns_invalid_response(): void
     {
         Http::fake(['*' => Http::response(['status' => 'completed', 'output' => [['type' => 'reasoning']]], 200)]);

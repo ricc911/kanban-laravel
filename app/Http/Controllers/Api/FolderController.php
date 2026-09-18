@@ -37,7 +37,15 @@ class FolderController extends Controller
 
     public function update(UpdateFolderRequest $request, Folder $folder, UpdateFolder $action): JsonResponse
     {
-        return response()->json(['data' => $action->execute($request->user(), $folder, $request->validated('name'), $request->validated('color'))]);
+        $data = $request->validated();
+
+        return response()->json(['data' => $action->execute(
+            $request->user(),
+            $folder,
+            $data['name'] ?? $folder->name,
+            $data['color'] ?? null,
+            array_keys($data),
+        )]);
     }
 
     public function move(MoveFolderRequest $request, Folder $folder, MoveFolder $action): JsonResponse

@@ -69,6 +69,42 @@ class WorkspaceManagementTest extends TestCase
         $this->assertTrue(collect($this->actingAs($member)->getJson('/api/workspaces')->json('data'))->contains('id', $workspace->id));
     }
 
+    public function test_existing_pending_invitation_can_be_renewed_when_member_slots_are_full(): void
+    {
+        $owner = $this->teamUser();
+        $owner->subscription->plan->update(['max_members_per_workspace' => 2]);
+        $workspace = $this->createShared($owner);
+        $invitee = User::factory()->create(['email' => 'guest@example.com']);
+        $endpoint = "/api/workspaces/{$workspace->id}/invitations";
+
+        $this->actingAs($owner)->postJson($endpoint, ['email' => $invitee->email])->assertCreated();
+        $originalInvitation = WorkspaceInvitation::where('workspace_id', $workspace->id)->firstOrFail();
+        $this->actingAs($owner)->postJson($endpoint, ['email' => 'Guest@Example.com'])->assertCreated();
+
+        $renewedInvitation = $originalInvitation->fresh();
+        $this->assertSame($originalInvitation->id, $renewedInvitation->id);
+        $this->assertNotSame($originalInvitation->token, $renewedInvitation->token);
+        $this->assertSame(1, $workspace->invitations()->count());
+        $this->actingAs($owner)->postJson($endpoint, ['email' => 'other@example.com'])->assertUnprocessable();
+    }
+
+    public function test_expired_invitation_needs_a_free_slot_before_renewal(): void
+    {
+        $owner = $this->teamUser();
+        $owner->subscription->plan->update(['max_members_per_workspace' => 2]);
+        $workspace = $this->createShared($owner);
+        $endpoint = "/api/workspaces/{$workspace->id}/invitations";
+
+        $this->actingAs($owner)->postJson($endpoint, ['email' => 'expired@example.com'])->assertCreated();
+        $expiredInvitation = WorkspaceInvitation::where('workspace_id', $workspace->id)->firstOrFail();
+        $expiredInvitation->update(['expires_at' => now()->subDay()]);
+        $this->actingAs($owner)->postJson($endpoint, ['email' => 'active@example.com'])->assertCreated();
+        $this->actingAs($owner)->postJson($endpoint, ['email' => 'expired@example.com'])->assertUnprocessable();
+
+        $this->assertSame($expiredInvitation->token, $expiredInvitation->fresh()->token);
+        $this->assertSame(2, $workspace->invitations()->count());
+    }
+
     public function test_owner_can_remove_member_but_member_cannot_remove_others(): void
     {
         $owner = $this->teamUser();

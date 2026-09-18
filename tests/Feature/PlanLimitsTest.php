@@ -68,6 +68,22 @@ class PlanLimitsTest extends TestCase
         $this->assertSame(0, app(PlanLimitService::class)->ownedSharedWorkspaceCount($owner));
     }
 
+    public function test_member_board_creation_consumes_the_owner_project_limit_across_workspaces(): void
+    {
+        $owner = $this->userOnPlan('team');
+        $owner->subscription->plan->update(['max_projects' => 1]);
+        $personal = $owner->ownedWorkspaces()->where('type', 'personal')->firstOrFail();
+        $shared = $this->createShared($owner);
+        $member = User::factory()->create();
+        $shared->members()->attach($member->id, ['role' => 'member', 'joined_at' => now()]);
+
+        $this->actingAs($member)->postJson("/api/workspaces/{$shared->id}/boards", ['name' => 'Shared project'])->assertCreated();
+        $this->actingAs($owner)->postJson("/api/workspaces/{$personal->id}/boards", ['name' => 'Extra project'])->assertUnprocessable();
+
+        $this->assertSame(1, app(PlanLimitService::class)->ownedProjectCount($owner));
+        $this->assertDatabaseMissing('boards', ['workspace_id' => $personal->id, 'name' => 'Extra project']);
+    }
+
     public function test_team_can_create_three_owner_only_shared_workspaces_but_not_a_fourth(): void
     {
         $owner = $this->userOnPlan('team');

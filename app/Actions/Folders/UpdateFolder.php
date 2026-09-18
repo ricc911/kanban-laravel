@@ -14,7 +14,8 @@ class UpdateFolder
 {
     public function __construct(private LogActivity $logger) {}
 
-    public function execute(User $user, Folder $folder, string $name, ?string $color = null): Folder
+    /** @param array<int, string>|null $providedFields */
+    public function execute(User $user, Folder $folder, string $name, ?string $color = null, ?array $providedFields = null): Folder
     {
         if (! $folder->workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
@@ -22,18 +23,20 @@ class UpdateFolder
             ]);
         }
 
+        $updates = [];
         $changes = [];
-        foreach (['name' => [$folder->name, trim($name)], 'color' => [$folder->color, $color]] as $field => [$old, $new]) {
+        $values = ['name' => trim($name), 'color' => $color];
+        foreach ($providedFields ?? array_keys($values) as $field) {
+            $old = $folder->getAttribute($field);
+            $new = $values[$field];
+            $updates[$field] = $new;
             if ($old !== $new) {
                 $changes[$field] = ['old' => $old, 'new' => $new];
             }
         }
 
-        return DB::transaction(function () use ($user, $folder, $name, $color, $changes): Folder {
-            $folder->update([
-                'name' => trim($name),
-                'color' => $color,
-            ]);
+        return DB::transaction(function () use ($user, $folder, $updates, $changes): Folder {
+            $folder->update($updates);
             $freshFolder = $folder->fresh();
             if ($changes) {
                 $this->logger->execute($user, $folder->workspace, 'folder.updated', null, $freshFolder, ['folder_name' => $freshFolder->name, 'changes' => $changes]);

@@ -118,6 +118,39 @@ class FolderBoardWriteTest extends TestCase
             ->assertJsonValidationErrors('board');
     }
 
+    public function test_partial_board_update_preserves_optional_fields_until_explicitly_cleared(): void
+    {
+        $user = User::factory()->create();
+        $workspace = $user->ownedWorkspaces()->where('type', 'personal')->firstOrFail();
+        $board = Board::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Roadmap',
+            'description' => 'Dettagli',
+            'color' => '#4f6f9f',
+        ]);
+
+        $this->actingAs($user)->patchJson("/api/boards/{$board->id}", ['name' => 'Roadmap 2026'])
+            ->assertOk()->assertJsonPath('data.description', 'Dettagli')->assertJsonPath('data.color', '#4f6f9f');
+        $this->actingAs($user)->patchJson("/api/boards/{$board->id}", ['description' => null, 'color' => null])
+            ->assertOk()->assertJsonPath('data.name', 'Roadmap 2026');
+
+        $this->assertDatabaseHas('boards', ['id' => $board->id, 'name' => 'Roadmap 2026', 'description' => null, 'color' => null]);
+    }
+
+    public function test_partial_folder_update_preserves_color_until_explicitly_cleared(): void
+    {
+        $user = User::factory()->create();
+        $workspace = $user->ownedWorkspaces()->where('type', 'personal')->firstOrFail();
+        $folder = Folder::create(['workspace_id' => $workspace->id, 'name' => 'Clienti', 'color' => '#4f6f9f']);
+
+        $this->actingAs($user)->patchJson("/api/folders/{$folder->id}", ['name' => 'Clienti attivi'])
+            ->assertOk()->assertJsonPath('data.color', '#4f6f9f');
+        $this->actingAs($user)->patchJson("/api/folders/{$folder->id}", ['color' => null])
+            ->assertOk()->assertJsonPath('data.name', 'Clienti attivi');
+
+        $this->assertDatabaseHas('folders', ['id' => $folder->id, 'name' => 'Clienti attivi', 'color' => null]);
+    }
+
     public function test_resources_cannot_be_moved_to_another_workspace(): void
     {
         $owner = User::create([

@@ -50,12 +50,6 @@ class InviteWorkspaceMember
                 ]);
             }
 
-            if (! $this->planLimits->canInviteMember($workspace)) {
-                throw ValidationException::withMessages([
-                    'workspace' => 'Hai raggiunto il limite di membri del workspace.',
-                ]);
-            }
-
             $identifier = trim($email);
             $isEmail = filter_var($identifier, FILTER_VALIDATE_EMAIL) !== false;
             $recipient = $isEmail
@@ -75,6 +69,17 @@ class InviteWorkspaceMember
             if ($workspace->members()->whereRaw('LOWER(users.email) = ?', [$email])->exists()) {
                 throw ValidationException::withMessages([
                     'email' => 'Questo utente fa giÃ  parte del workspace.',
+                ]);
+            }
+
+            $existingInvitation = $workspace->invitations()->where('email', $email)->first();
+            $occupiesSlot = $existingInvitation !== null
+                && $existingInvitation->accepted_at === null
+                && $existingInvitation->expires_at->isFuture();
+
+            if (! $occupiesSlot && ! $this->planLimits->canInviteMember($workspace)) {
+                throw ValidationException::withMessages([
+                    'workspace' => 'Hai raggiunto il limite di membri del workspace.',
                 ]);
             }
 

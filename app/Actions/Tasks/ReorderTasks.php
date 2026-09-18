@@ -4,7 +4,6 @@ namespace App\Actions\Tasks;
 
 use App\Events\TasksReordered;
 use App\Models\BoardColumn;
-use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -22,45 +21,30 @@ class ReorderTasks
             ]);
         }
 
-        $tasks = Task::whereIn('id', $taskIds)->get();
-
-        $existingTaskIds = $column->tasks()
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id);
-
-        $requestedTaskIds = collect($taskIds)
-            ->map(fn ($id) => (int) $id);
-
-        if ($existingTaskIds->diff($requestedTaskIds)->isNotEmpty()) {
-            throw ValidationException::withMessages([
-                'tasks' => 'Devi fornire l’ordine completo delle task della colonna.',
-            ]);
-        }
-
-        if ($tasks->count() !== count(array_unique($taskIds))) {
-            throw ValidationException::withMessages([
-                'tasks' => 'Una o più task non sono valide.',
-            ]);
-        }
-
-        if (
-            $tasks->contains(
-                fn (Task $task) => $task->board_id !== $column->board_id
-            )
-        ) {
-            throw ValidationException::withMessages([
-                'tasks' => 'Una task appartiene a un’altra board.',
-            ]);
-        }
-
         DB::transaction(function () use ($column, $taskIds): void {
+            $existingTaskIds = $column->tasks()
+                ->lockForUpdate()
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->sort()
+                ->values()
+                ->all();
+            $requestedTaskIds = collect($taskIds)
+                ->map(fn ($id) => (int) $id)
+                ->sort()
+                ->values()
+                ->all();
+
+            if ($existingTaskIds !== $requestedTaskIds) {
+                throw ValidationException::withMessages([
+                    'tasks' => 'Devi fornire l’ordine completo delle task della colonna.',
+                ]);
+            }
+
             $positions = [];
             foreach ($taskIds as $index => $taskId) {
                 $position = ($index + 1) * 1000;
-                Task::whereKey($taskId)->update([
-                    'board_column_id' => $column->id,
-                    'position' => $position,
-                ]);
+                $column->tasks()->whereKey($taskId)->update(['position' => $position]);
                 $positions[] = ['id' => (int) $taskId, 'position' => $position];
             }
 

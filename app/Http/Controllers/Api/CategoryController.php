@@ -22,7 +22,15 @@ class CategoryController extends Controller
 
     public function update(UpdateCategoryRequest $request, Category $category, UpdateCategory $action): JsonResponse
     {
-        return response()->json(['data' => $action->execute($request->user(), $category, $request->validated('name'), $request->validated('color'))]);
+        $data = $request->validated();
+
+        return response()->json(['data' => $action->execute(
+            $request->user(),
+            $category,
+            $data['name'] ?? $category->name,
+            $data['color'] ?? null,
+            array_keys($data),
+        )]);
     }
 
     public function destroy(DestroyCategoryRequest $request, Category $category, DeleteCategory $action): JsonResponse

@@ -57,6 +57,10 @@ class AiController extends Controller
     public function breakdown(AiBreakdownRequest $request, Board $board, AiModelRouter $router, OpenAiClient $client, AiUsageService $usage, AiCreditCalculator $calculator, AiProjectContextBuilder $context, AiProductContext $productContext): JsonResponse
     {
         $response = $this->generateProject($request, $board, 'breakdown', ['tasks' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['title' => ['type' => 'string'], 'description' => ['type' => 'string'], 'priority' => ['type' => ['string', 'null'], 'enum' => ['low', 'medium', 'high', null]]], 'required' => ['title', 'description', 'priority'], 'additionalProperties' => false]]], $router, $client, $usage, $calculator, $context, $productContext, ['objective' => $request->validated('objective'), 'desired_count' => $request->validated('desired_count')]);
+        if (! $response->isSuccessful()) {
+            return $response;
+        }
+
         $data = $response->getData(true);
         $data['data']['tasks'] = array_slice($data['data']['tasks'] ?? [], 0, (int) $request->validated('desired_count'));
 
@@ -71,6 +75,10 @@ class AiController extends Controller
     public function analysis(AiProjectRequest $request, Board $board, AiModelRouter $router, OpenAiClient $client, AiUsageService $usage, AiCreditCalculator $calculator, AiProjectContextBuilder $context, AiProductContext $productContext): JsonResponse
     {
         $response = $this->generateProject($request, $board, 'analysis', ['executive_summary' => ['type' => 'string'], 'risks' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['severity' => ['type' => 'string', 'enum' => ['low', 'medium', 'high']], 'title' => ['type' => 'string'], 'detail' => ['type' => 'string'], 'task_ids' => ['type' => 'array', 'items' => ['type' => 'integer']]], 'required' => ['severity', 'title', 'detail', 'task_ids'], 'additionalProperties' => false]], 'priorities' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['title' => ['type' => 'string'], 'reason' => ['type' => 'string'], 'task_ids' => ['type' => 'array', 'items' => ['type' => 'integer']]], 'required' => ['title', 'reason', 'task_ids'], 'additionalProperties' => false]], 'recommendations' => ['type' => 'array', 'items' => ['type' => 'string']]], $router, $client, $usage, $calculator, $context, $productContext);
+        if (! $response->isSuccessful()) {
+            return $response;
+        }
+
         $data = $response->getData(true);
         $contextIds = collect($context->build($board)['tasks'] ?? [])->pluck('id')->map(fn ($id): int => (int) $id)->all();
         $allowedIds = $board->tasks()->whereIn('id', $contextIds)->pluck('id')->map(fn ($id): int => (int) $id)->flip()->all();

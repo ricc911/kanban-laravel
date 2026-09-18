@@ -40,9 +40,20 @@ class TaskController extends Controller
 
     public function update(UpdateTaskRequest $request, Task $task, UpdateTask $action): JsonResponse
     {
-        $category = $request->filled('category_id') ? Category::find($request->validated('category_id')) : null;
+        $data = $request->validated();
+        $category = isset($data['category_id']) ? Category::findOrFail($data['category_id']) : null;
 
-        return response()->json(['data' => $action->execute($request->user(), $task, $request->validated('title'), $request->validated('description'), $request->validated('priority'), $request->validated('due_at'), $category, $request->validated('color'))]);
+        return response()->json(['data' => $action->execute(
+            $request->user(),
+            $task,
+            $data['title'] ?? $task->title,
+            $data['description'] ?? null,
+            $data['priority'] ?? null,
+            $data['due_at'] ?? null,
+            $category,
+            $data['color'] ?? null,
+            array_keys($data),
+        )]);
     }
 
     public function move(MoveTaskRequest $request, Task $task, MoveTask $action): JsonResponse

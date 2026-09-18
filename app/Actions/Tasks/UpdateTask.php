@@ -16,6 +16,7 @@ class UpdateTask
 {
     public function __construct(private LogActivity $logger) {}
 
+    /** @param array<int, string>|null $providedFields */
     public function execute(
         User $user,
         Task $task,
@@ -24,8 +25,12 @@ class UpdateTask
         ?string $priority = null,
         ?string $dueAt = null,
         ?Category $category = null,
-        ?string $color = null
+        ?string $color = null,
+        ?array $providedFields = null
     ): Task {
+        $providedFields ??= ['title', 'description', 'priority', 'due_at', 'category_id', 'color'];
+        $provided = array_fill_keys($providedFields, true);
+
         if (! $task->board->workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
                 'task' => 'Non hai accesso a questa task.',
@@ -33,6 +38,7 @@ class UpdateTask
         }
 
         if (
+            isset($provided['category_id']) &&
             $category !== null &&
             $category->board_id !== $task->board_id
         ) {
@@ -42,19 +48,20 @@ class UpdateTask
         }
 
         $board = $task->board;
-        $oldCategory = $task->category;
+        $oldCategory = isset($provided['category_id']) ? $task->category : null;
         $oldDueAt = $task->due_at;
-        $newColor = $color ?? $task->color;
+        $newColor = $color;
         $newDueAt = $dueAt !== null ? Carbon::parse($dueAt) : null;
         $changes = [];
         foreach (['title' => [$task->title, trim($title)], 'description' => [$task->description, $description], 'priority' => [$task->priority, $priority]] as $field => [$old, $new]) {
-            if ($old !== $new) {
+            if (isset($provided[$field]) && $old !== $new) {
                 $changes[$field] = ['old' => $old, 'new' => $new];
             }
         }
         if (
-            ($oldDueAt === null) !== ($newDueAt === null) ||
-            ($oldDueAt !== null && $newDueAt !== null && ! $oldDueAt->equalTo($newDueAt))
+            isset($provided['due_at']) &&
+            (($oldDueAt === null) !== ($newDueAt === null) ||
+                ($oldDueAt !== null && $newDueAt !== null && ! $oldDueAt->equalTo($newDueAt)))
         ) {
             $changes['due_at'] = [
                 'old' => $oldDueAt?->toISOString(),
@@ -63,23 +70,25 @@ class UpdateTask
         }
         $oldCategoryValue = $oldCategory ? ['id' => $oldCategory->id, 'name' => $oldCategory->name] : null;
         $newCategoryValue = $category ? ['id' => $category->id, 'name' => $category->name] : null;
-        if ($oldCategoryValue !== $newCategoryValue) {
+        if (isset($provided['category_id']) && $oldCategoryValue !== $newCategoryValue) {
             $changes['category'] = ['old' => $oldCategoryValue, 'new' => $newCategoryValue];
         }
 
-        if ($task->color !== $newColor) {
+        if (isset($provided['color']) && $task->color !== $newColor) {
             $changes['color'] = ['old' => $task->color, 'new' => $newColor];
         }
 
-        return DB::transaction(function () use ($user, $task, $board, $title, $description, $priority, $newDueAt, $category, $newColor, $changes): Task {
-            $task->update([
-                'title' => trim($title),
-                'color' => $newColor,
-                'description' => $description,
-                'priority' => $priority,
-                'due_at' => $newDueAt,
-                'category_id' => $category?->id,
-            ]);
+        $updates = array_intersect_key([
+            'title' => trim($title),
+            'color' => $newColor,
+            'description' => $description,
+            'priority' => $priority,
+            'due_at' => $newDueAt,
+            'category_id' => $category?->id,
+        ], $provided);
+
+        return DB::transaction(function () use ($user, $task, $board, $updates, $changes): Task {
+            $task->update($updates);
             if (array_key_exists('due_at', $changes)) {
                 TaskReminderDelivery::query()->where('task_id', $task->id)->delete();
             }

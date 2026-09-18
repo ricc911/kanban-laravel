@@ -16,7 +16,7 @@ class SendTaskDueReminders
     {
         $now = now();
         $counts = ['due_soon' => 0, 'overdue' => 0];
-        Task::query()->where('archived', false)->whereNotNull('due_at')->where('due_at', '<=', $now->copy()->addDay())->with('board.workspace', 'assignees')->chunkById(100, function ($tasks) use (&$counts): void {
+        Task::query()->where('archived', false)->whereHas('board', fn ($query) => $query->where('archived', false))->whereNotNull('due_at')->where('due_at', '<=', $now->copy()->addDay())->with('board.workspace', 'assignees')->chunkById(100, function ($tasks) use (&$counts): void {
             foreach ($tasks as $task) {
                 $kind = $task->due_at->isPast() ? 'overdue' : 'due_soon';
                 foreach ($task->assignees as $user) {

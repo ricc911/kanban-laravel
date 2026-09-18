@@ -14,7 +14,8 @@ class UpdateBoard
 {
     public function __construct(private LogActivity $logger) {}
 
-    public function execute(User $user, Board $board, string $name, ?string $description = null, ?string $color = null): Board
+    /** @param array<int, string>|null $providedFields */
+    public function execute(User $user, Board $board, string $name, ?string $description = null, ?string $color = null, ?array $providedFields = null): Board
     {
         if (! $board->workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
@@ -22,19 +23,20 @@ class UpdateBoard
             ]);
         }
 
+        $updates = [];
         $changes = [];
-        foreach (['name' => [$board->name, trim($name)], 'description' => [$board->description, $description], 'color' => [$board->color, $color]] as $field => [$old, $new]) {
+        $values = ['name' => trim($name), 'description' => $description, 'color' => $color];
+        foreach ($providedFields ?? array_keys($values) as $field) {
+            $old = $board->getAttribute($field);
+            $new = $values[$field];
+            $updates[$field] = $new;
             if ($old !== $new) {
                 $changes[$field] = ['old' => $old, 'new' => $new];
             }
         }
 
-        return DB::transaction(function () use ($user, $board, $name, $description, $color, $changes): Board {
-            $board->update([
-                'name' => trim($name),
-                'description' => $description,
-                'color' => $color,
-            ]);
+        return DB::transaction(function () use ($user, $board, $updates, $changes): Board {
+            $board->update($updates);
             $freshBoard = $board->fresh();
             if ($changes) {
                 $this->logger->execute($user, $board->workspace, 'board.updated', $freshBoard, $freshBoard, ['board_name' => $freshBoard->name, 'changes' => $changes]);

@@ -113,6 +113,79 @@ class BoardWriteOperationsTest extends TestCase
         $this->assertSame(3000, $second->fresh()->position);
     }
 
+    public function test_reordering_rejects_a_task_from_another_column_without_moving_it(): void
+    {
+        [$user, $board, $column] = $this->boardWithColumn();
+        $otherColumn = BoardColumn::create(['board_id' => $board->id, 'name' => 'Doing', 'position' => 2000]);
+        $task = Task::create(['board_id' => $board->id, 'board_column_id' => $column->id, 'title' => 'A', 'position' => 1000]);
+        $otherTask = Task::create(['board_id' => $board->id, 'board_column_id' => $otherColumn->id, 'title' => 'B', 'position' => 1000]);
+
+        $this->actingAs($user)->postJson("/api/columns/{$column->id}/tasks/reorder", [
+            'task_ids' => [$task->id, $otherTask->id],
+        ])->assertUnprocessable()->assertJsonValidationErrors('tasks');
+
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'board_column_id' => $column->id, 'position' => 1000]);
+        $this->assertDatabaseHas('tasks', ['id' => $otherTask->id, 'board_column_id' => $otherColumn->id, 'position' => 1000]);
+    }
+
+    public function test_partial_task_update_preserves_omitted_fields_and_allows_explicit_null(): void
+    {
+        [$user, $board, $column] = $this->boardWithColumn();
+        $category = Category::create(['board_id' => $board->id, 'name' => 'Backend', 'position' => 1000]);
+        $task = Task::create([
+            'board_id' => $board->id,
+            'board_column_id' => $column->id,
+            'category_id' => $category->id,
+            'title' => 'Originale',
+            'description' => 'Dettagli',
+            'priority' => 'high',
+            'due_at' => '2026-10-01',
+            'color' => '#4f6f9f',
+            'position' => 1000,
+        ]);
+
+        $this->actingAs($user)->patchJson("/api/tasks/{$task->id}", ['title' => 'Aggiornata'])
+            ->assertOk()
+            ->assertJsonPath('data.description', 'Dettagli')
+            ->assertJsonPath('data.category_id', $category->id)
+            ->assertJsonPath('data.color', '#4f6f9f');
+
+        $updatedTask = $task->fresh();
+        $this->assertSame('high', $updatedTask->priority);
+        $this->assertSame('2026-10-01', $updatedTask->due_at->toDateString());
+
+        $this->actingAs($user)->patchJson("/api/tasks/{$task->id}", [
+            'description' => null,
+            'priority' => null,
+            'due_at' => null,
+            'category_id' => null,
+            'color' => null,
+        ])->assertOk()->assertJsonPath('data.title', 'Aggiornata')->assertJsonPath('data.color', null);
+
+        $this->assertDatabaseHas('tasks', [
+            'id' => $task->id,
+            'title' => 'Aggiornata',
+            'description' => null,
+            'priority' => null,
+            'due_at' => null,
+            'category_id' => null,
+            'color' => null,
+        ]);
+    }
+
+    public function test_partial_category_update_preserves_color_until_explicitly_cleared(): void
+    {
+        [$user, $board] = $this->boardWithColumn();
+        $category = Category::create(['board_id' => $board->id, 'name' => 'Design', 'color' => '#4f6f9f', 'position' => 1000]);
+
+        $this->actingAs($user)->patchJson("/api/categories/{$category->id}", ['name' => 'UI'])
+            ->assertOk()->assertJsonPath('data.color', '#4f6f9f');
+        $this->actingAs($user)->patchJson("/api/categories/{$category->id}", ['color' => null])
+            ->assertOk()->assertJsonPath('data.name', 'UI')->assertJsonPath('data.color', null);
+
+        $this->assertDatabaseHas('categories', ['id' => $category->id, 'name' => 'UI', 'color' => null]);
+    }
+
     public function test_user_can_create_update_and_delete_categories(): void
     {
         [$user, $board, $column] = $this->boardWithColumn();

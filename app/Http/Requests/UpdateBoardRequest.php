@@ -16,7 +16,7 @@ class UpdateBoardRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
             'color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'description' => ['nullable', 'string'],
         ];

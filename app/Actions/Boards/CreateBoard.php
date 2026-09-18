@@ -39,13 +39,16 @@ class CreateBoard
             ]);
         }
 
-        if (! $this->planLimits->canCreateProject($workspace)) {
-            throw ValidationException::withMessages([
-                'board' => 'Hai raggiunto il limite di progetti del piano.',
-            ]);
-        }
-
         return DB::transaction(function () use ($user, $workspace, $folder, $name, $color) {
+            $owner = User::query()->lockForUpdate()->findOrFail($workspace->owner_id);
+            $workspace->setRelation('owner', $owner);
+
+            if (! $this->planLimits->canCreateProject($workspace)) {
+                throw ValidationException::withMessages([
+                    'board' => 'Hai raggiunto il limite di progetti del piano.',
+                ]);
+            }
+
             $board = Board::create([
                 'workspace_id' => $workspace->id,
                 'folder_id' => $folder?->id,

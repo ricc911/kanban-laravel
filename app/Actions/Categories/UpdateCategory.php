@@ -14,11 +14,13 @@ class UpdateCategory
 {
     public function __construct(private LogActivity $logger) {}
 
+    /** @param array<int, string>|null $providedFields */
     public function execute(
         User $user,
         Category $category,
         string $name,
-        ?string $color = null
+        ?string $color = null,
+        ?array $providedFields = null
     ): Category {
         if (! $category->board->workspace->canEditContent($user)) {
             throw ValidationException::withMessages([
@@ -26,18 +28,20 @@ class UpdateCategory
             ]);
         }
 
+        $updates = [];
         $changes = [];
-        foreach (['name' => [$category->name, trim($name)], 'color' => [$category->color, $color]] as $field => [$old, $new]) {
+        $values = ['name' => trim($name), 'color' => $color];
+        foreach ($providedFields ?? array_keys($values) as $field) {
+            $old = $category->getAttribute($field);
+            $new = $values[$field];
+            $updates[$field] = $new;
             if ($old !== $new) {
                 $changes[$field] = ['old' => $old, 'new' => $new];
             }
         }
 
-        return DB::transaction(function () use ($user, $category, $name, $color, $changes): Category {
-            $category->update([
-                'name' => trim($name),
-                'color' => $color,
-            ]);
+        return DB::transaction(function () use ($user, $category, $updates, $changes): Category {
+            $category->update($updates);
             $freshCategory = $category->fresh();
             if ($changes) {
                 $this->logger->execute($user, $category->board->workspace, 'category.updated', $category->board, $freshCategory, ['category_name' => $freshCategory->name, 'changes' => $changes]);
